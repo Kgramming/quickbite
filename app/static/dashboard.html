@@ -26,10 +26,45 @@
     --blue: #2563EB;
     --blue-soft: #EAF1FE;
     --amber: #D97706;
+    --chaos-tag: #B45309;
+    --badge-neutral-bg: #F1EDE6;
+    --badge-neutral-text: #78716C;
+    --dlq-border: #E5B8B8;
+    --dlq-bg: #FFF7F7;
+    --chaos-card-border: #F0D9C8;
+    --chaos-gradient: linear-gradient(180deg, #FFFBF6, #FFFFFF);
+    --topbar-bg: rgba(255, 255, 255, 0.92);
     --radius: 14px;
     --shadow: 0 1px 2px rgba(60, 42, 28, 0.05), 0 4px 14px rgba(60, 42, 28, 0.06);
     --shadow-lg: 0 8px 32px rgba(60, 42, 28, 0.14);
     --mono: "SF Mono", "Cascadia Code", Consolas, "Roboto Mono", monospace;
+  }
+
+  /* ---------- dark theme ---------- */
+  [data-theme="dark"] {
+    --bg: #191410;
+    --surface: #241D16;
+    --surface-warm: #2A221A;
+    --border: #3E332A;
+    --border-strong: #55463A;
+    --text: #F5EFE4;
+    --muted: #AB9E8D;
+    --faint: #6F6355;
+    --tomato-soft: #3B2220;
+    --orange-soft: #3A2C16;
+    --green-soft: #1B3325;
+    --red-soft: #3B2220;
+    --blue-soft: #1E2C44;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 14px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+    --chaos-tag: #F0A35C;
+    --badge-neutral-bg: #38312B;
+    --badge-neutral-text: #AB9E8D;
+    --dlq-border: #7A4A4A;
+    --dlq-bg: #2A1E1E;
+    --chaos-card-border: #4A3A2C;
+    --chaos-gradient: linear-gradient(180deg, #2A221A, #241D16);
+    --topbar-bg: rgba(36, 29, 22, 0.92);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -42,7 +77,7 @@
   /* ---------- header ---------- */
   .topbar {
     position: sticky; top: 0; z-index: 40;
-    background: rgba(255, 255, 255, 0.92);
+    background: var(--topbar-bg);
     backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--border);
   }
@@ -72,6 +107,9 @@
   .dot.ok { background: var(--green); box-shadow: 0 0 8px rgba(22, 163, 74, 0.6); }
   .dot.bad { background: var(--red); box-shadow: 0 0 8px rgba(220, 38, 38, 0.6); }
   #clock { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .theme-toggle { cursor: pointer; font-size: 14px; padding: 6px 11px; transition: transform 0.06s, border-color 0.15s; }
+  .theme-toggle:hover { border-color: var(--tomato); }
+  .theme-toggle:active { transform: scale(0.94); }
 
   /* ---------- layout ---------- */
   .wrap { max-width: 1440px; margin: 0 auto; padding: 20px 24px 40px; }
@@ -116,7 +154,7 @@
   .hint code { color: var(--tomato-dark); font-family: var(--mono); background: var(--tomato-soft); padding: 1px 5px; border-radius: 4px; }
 
   /* ---------- chaos lab ---------- */
-  .chaos-card { border-color: #F0D9C8; background: linear-gradient(180deg, #FFFBF6, #FFFFFF); }
+  .chaos-card { border-color: var(--chaos-card-border); background: var(--chaos-gradient); }
   .chaos-card h2 .tick { background: var(--orange); }
   .btn-chaos {
     display: block; width: 100%; margin-top: 10px; padding: 11px 13px;
@@ -130,7 +168,7 @@
   .btn-chaos .tag {
     display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: 0.6px;
     padding: 3px 8px; border-radius: 6px; margin-right: 9px; vertical-align: 1px;
-    background: var(--orange-soft); color: #B45309;
+    background: var(--orange-soft); color: var(--chaos-tag);
   }
   .btn-chaos strong { font-size: 13px; font-weight: 700; }
   .btn-chaos small { display: block; color: var(--muted); font-weight: 400; margin-top: 4px; font-size: 11.5px; line-height: 1.45; }
@@ -154,12 +192,12 @@
     font-size: 10px; font-weight: 800; letter-spacing: 0.7px; padding: 4px 10px;
     border-radius: 999px; white-space: nowrap;
   }
-  .st-PENDING { background: #F1EDE6; color: #78716C; }
+  .st-PENDING { background: var(--badge-neutral-bg); color: var(--badge-neutral-text); }
   .st-PAID { background: var(--blue-soft); color: var(--blue); }
   .st-CONFIRMED { background: var(--orange-soft); color: var(--amber); }
   .st-DRIVER_ASSIGNED { background: var(--green-soft); color: var(--green); }
   .st-PAYMENT_FAILED, .st-FAILED { background: var(--red-soft); color: var(--red); }
-  .st-CANCELLED { background: #F1EDE6; color: var(--muted); }
+  .st-CANCELLED { background: var(--badge-neutral-bg); color: var(--muted); }
   .empty { color: var(--faint); text-align: center; padding: 36px 12px; font-size: 13px; }
 
   /* ---------- pipeline ---------- */
@@ -181,8 +219,8 @@
   .depth.hot { background: var(--red-soft); color: var(--red); animation: pulse 1.2s infinite; }
   @keyframes pulse { 50% { opacity: 0.55; } }
   .dlq-card {
-    margin-top: 14px; border: 1.5px dashed #E5B8B8; border-radius: 12px;
-    padding: 13px 15px; background: #FFF7F7;
+    margin-top: 14px; border: 1.5px dashed var(--dlq-border); border-radius: 12px;
+    padding: 13px 15px; background: var(--dlq-bg);
   }
   .dlq-card h3 { font-size: 11px; color: var(--red); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; font-weight: 800; }
   .dlq-card .n { font-size: 26px; font-weight: 800; font-family: var(--mono); color: var(--text); }
@@ -268,6 +306,7 @@
       <span class="pill-badge"><span class="dot" id="dot-db"></span>Database</span>
       <span class="pill-badge"><span class="dot" id="dot-rmq"></span>RabbitMQ</span>
       <span class="pill-badge" id="clock" aria-label="Current time"></span>
+      <button class="pill-badge theme-toggle" id="theme-toggle" aria-label="Switch to dark mode" title="Toggle light / dark theme">🌙</button>
     </div>
   </div>
 </header>
@@ -573,6 +612,20 @@ $("#chaos-dup").addEventListener("click", async () => {
     toast(`Duplicate order.created republished (event ${String(r.event_id).slice(0, 8)}…) — idempotency absorbs it`);
   } catch (e) { toast("Duplicate failed: " + e.message, true); }
 });
+
+// ---------- theme ----------
+function setTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  try { localStorage.setItem("qb-theme", theme); } catch (e) {}
+  const btn = $("#theme-toggle");
+  btn.textContent = theme === "dark" ? "☀️" : "🌙";
+  btn.setAttribute("aria-label", theme === "dark" ? "Switch to light mode" : "Switch to dark mode");
+}
+$("#theme-toggle").addEventListener("click", () => {
+  setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+});
+try { setTheme(localStorage.getItem("qb-theme") || "light"); }
+catch (e) { setTheme("light"); }
 
 // ---------- clock + loops ----------
 setInterval(() => {
