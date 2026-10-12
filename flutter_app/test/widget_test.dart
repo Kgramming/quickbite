@@ -6,17 +6,23 @@
 // tree, read text, and verify that the values of widget properties are correct.
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:quickbite/main.dart';
 
 void main() {
   testWidgets('QuickBite app smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const QuickBiteApp());
+    // Build our app and trigger a frame, wrapped in ProviderScope for Riverpod.
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: QuickBiteApp(),
+      ),
+    );
 
     // Verify that the app starts without errors.
     // More comprehensive tests would verify login flow, navigation, etc.
     expect(find.byType(QuickBiteApp), findsOneWidget);
   });
 }
+
 
