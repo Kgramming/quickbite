@@ -624,8 +624,8 @@ function setTheme(theme) {
 $("#theme-toggle").addEventListener("click", () => {
   setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
 });
-try { setTheme(localStorage.getItem("qb-theme") || "light"); }
-catch (e) { setTheme("light"); }
+try { setTheme(localStorage.getItem("qb-theme") || "dark"); }
+catch (e) { setTheme("dark"); }
 
 // ---------- clock + loops ----------
 setInterval(() => {
