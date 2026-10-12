@@ -1,53 +1,88 @@
 import 'package:equatable/equatable.dart';
-import 'package:json_annotation/json_annotation.dart';
-
-part 'order.g.dart';
 
 enum OrderStatus {
-  @JsonValue('PENDING')
   pending,
-  @JsonValue('PAID')
   paid,
-  @JsonValue('CONFIRMED')
   confirmed,
-  @JsonValue('DRIVER_ASSIGNED')
   driverAssigned,
-  @JsonValue('PAYMENT_FAILED')
   paymentFailed,
-  @JsonValue('FAILED')
   failed,
-  @JsonValue('CANCELLED')
   cancelled,
 }
 
-@JsonSerializable()
-class OrderItem extends Equatable {
-  @JsonKey(name: 'menu_item_id')
-  final String menuItemId;
+OrderStatus _parseOrderStatus(String? status) {
+  switch (status?.toUpperCase()) {
+    case 'PENDING':
+      return OrderStatus.pending;
+    case 'PAID':
+      return OrderStatus.paid;
+    case 'CONFIRMED':
+      return OrderStatus.confirmed;
+    case 'DRIVER_ASSIGNED':
+      return OrderStatus.driverAssigned;
+    case 'PAYMENT_FAILED':
+      return OrderStatus.paymentFailed;
+    case 'FAILED':
+      return OrderStatus.failed;
+    case 'CANCELLED':
+      return OrderStatus.cancelled;
+    default:
+      return OrderStatus.pending;
+  }
+}
 
+String _orderStatusToString(OrderStatus status) {
+  switch (status) {
+    case OrderStatus.pending:
+      return 'PENDING';
+    case OrderStatus.paid:
+      return 'PAID';
+    case OrderStatus.confirmed:
+      return 'CONFIRMED';
+    case OrderStatus.driverAssigned:
+      return 'DRIVER_ASSIGNED';
+    case OrderStatus.paymentFailed:
+      return 'PAYMENT_FAILED';
+    case OrderStatus.failed:
+      return 'FAILED';
+    case OrderStatus.cancelled:
+      return 'CANCELLED';
+  }
+}
+
+class OrderItem extends Equatable {
+  final String menuItemId;
   final String name;
   final int quantity;
-
-  @JsonKey(name: 'price_minor')
-  final int priceminor;
+  final int priceMinor;
 
   const OrderItem({
     required this.menuItemId,
     required this.name,
     required this.quantity,
-    required this.priceminor,
+    required this.priceMinor,
   });
 
-  factory OrderItem.fromJson(Map<String, dynamic> json) =>
-      _$OrderItemFromJson(json);
+  factory OrderItem.fromJson(Map<String, dynamic> json) {
+    return OrderItem(
+      menuItemId: json['menu_item_id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      quantity: json['quantity'] as int? ?? 1,
+      priceMinor: json['price_minor'] as int? ?? 0,
+    );
+  }
 
-  Map<String, dynamic> toJson() => _$OrderItemToJson(this);
+  Map<String, dynamic> toJson() => {
+        'menu_item_id': menuItemId,
+        'name': name,
+        'quantity': quantity,
+        'price_minor': priceMinor,
+      };
 
   @override
-  List<Object?> get props => [menuItemId, name, quantity, priceminor];
+  List<Object?> get props => [menuItemId, name, quantity, priceMinor];
 }
 
-@JsonSerializable()
 class Driver extends Equatable {
   final String name;
   final String? phone;
@@ -61,42 +96,38 @@ class Driver extends Equatable {
     this.longitude,
   });
 
-  factory Driver.fromJson(Map<String, dynamic> json) => _$DriverFromJson(json);
+  factory Driver.fromJson(Map<String, dynamic> json) {
+    return Driver(
+      name: json['name'] as String? ?? '',
+      phone: json['phone'] as String?,
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
+    );
+  }
 
-  Map<String, dynamic> toJson() => _$DriverToJson(this);
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'phone': phone,
+        'latitude': latitude,
+        'longitude': longitude,
+      };
 
   @override
   List<Object?> get props => [name, phone, latitude, longitude];
 }
 
-@JsonSerializable()
 class Order extends Equatable {
   final String id;
-
-  @JsonKey(name: 'restaurant_id')
   final String restaurantId;
-
   final OrderStatus status;
   final String currency;
-
-  @JsonKey(name: 'total_amount_minor')
   final int totalAmountMinor;
-
   final int version;
-
-  @JsonKey(name: 'failure_code')
   final String? failureCode;
-
   final Driver? driver;
   final List<OrderItem> items;
-
-  @JsonKey(name: 'delivery_address')
   final String deliveryAddress;
-
-  @JsonKey(name: 'created_at')
   final DateTime createdAt;
-
-  @JsonKey(name: 'updated_at')
   final DateTime updatedAt;
 
   const Order({
@@ -114,9 +145,46 @@ class Order extends Equatable {
     required this.updatedAt,
   });
 
-  factory Order.fromJson(Map<String, dynamic> json) => _$OrderFromJson(json);
+  factory Order.fromJson(Map<String, dynamic> json) {
+    final itemsList = json['items'] as List? ?? [];
+    final items = itemsList
+        .map((item) => OrderItem.fromJson(item as Map<String, dynamic>))
+        .toList();
 
-  Map<String, dynamic> toJson() => _$OrderToJson(this);
+    return Order(
+      id: json['id'] as String? ?? '',
+      restaurantId: json['restaurant_id'] as String? ?? '',
+      status: _parseOrderStatus(json['status'] as String?),
+      currency: json['currency'] as String? ?? 'INR',
+      totalAmountMinor: json['total_amount_minor'] as int? ?? 0,
+      version: json['version'] as int? ?? 1,
+      failureCode: json['failure_code'] as String?,
+      driver: json['driver'] != null
+          ? Driver.fromJson(json['driver'] as Map<String, dynamic>)
+          : null,
+      items: items,
+      deliveryAddress: json['delivery_address'] as String? ?? '',
+      createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ??
+          DateTime.now(),
+      updatedAt: DateTime.tryParse(json['updated_at'] as String? ?? '') ??
+          DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'restaurant_id': restaurantId,
+        'status': _orderStatusToString(status),
+        'currency': currency,
+        'total_amount_minor': totalAmountMinor,
+        'version': version,
+        'failure_code': failureCode,
+        'driver': driver?.toJson(),
+        'items': items.map((item) => item.toJson()).toList(),
+        'delivery_address': deliveryAddress,
+        'created_at': createdAt.toIso8601String(),
+        'updated_at': updatedAt.toIso8601String(),
+      };
 
   bool get isTerminal =>
       status == OrderStatus.paymentFailed ||
@@ -146,14 +214,10 @@ class Order extends Equatable {
       ];
 }
 
-@JsonSerializable()
 class PaginatedOrders extends Equatable {
   final List<Order> items;
   final int page;
-
-  @JsonKey(name: 'page_size')
   final int pageSize;
-
   final int total;
 
   const PaginatedOrders({
@@ -163,25 +227,35 @@ class PaginatedOrders extends Equatable {
     required this.total,
   });
 
-  factory PaginatedOrders.fromJson(Map<String, dynamic> json) =>
-      _$PaginatedOrdersFromJson(json);
+  factory PaginatedOrders.fromJson(Map<String, dynamic> json) {
+    final itemsList = json['items'] as List? ?? [];
+    final orders = itemsList
+        .map((item) => Order.fromJson(item as Map<String, dynamic>))
+        .toList();
 
-  Map<String, dynamic> toJson() => _$PaginatedOrdersToJson(this);
+    return PaginatedOrders(
+      items: orders,
+      page: json['page'] as int? ?? 1,
+      pageSize: json['page_size'] as int? ?? 20,
+      total: json['total'] as int? ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'items': items.map((item) => item.toJson()).toList(),
+        'page': page,
+        'page_size': pageSize,
+        'total': total,
+      };
 
   @override
   List<Object?> get props => [items, page, pageSize, total];
 }
 
-@JsonSerializable()
 class OrderNotification extends Equatable {
   final String id;
-
-  @JsonKey(name: 'event_type')
   final String eventType;
-
   final String message;
-
-  @JsonKey(name: 'created_at')
   final DateTime createdAt;
 
   const OrderNotification({
@@ -191,22 +265,30 @@ class OrderNotification extends Equatable {
     required this.createdAt,
   });
 
-  factory OrderNotification.fromJson(Map<String, dynamic> json) =>
-      _$OrderNotificationFromJson(json);
+  factory OrderNotification.fromJson(Map<String, dynamic> json) {
+    return OrderNotification(
+      id: json['id'] as String? ?? '',
+      eventType: json['event_type'] as String? ?? '',
+      message: json['message'] as String? ?? '',
+      createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ??
+          DateTime.now(),
+    );
+  }
 
-  Map<String, dynamic> toJson() => _$OrderNotificationToJson(this);
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'event_type': eventType,
+        'message': message,
+        'created_at': createdAt.toIso8601String(),
+      };
 
   @override
   List<Object?> get props => [id, eventType, message, createdAt];
 }
 
-@JsonSerializable()
 class OrderStatusHistory extends Equatable {
   final String status;
-
-  @JsonKey(name: 'changed_at')
   final DateTime changedAt;
-
   final String? message;
 
   const OrderStatusHistory({
@@ -215,10 +297,20 @@ class OrderStatusHistory extends Equatable {
     this.message,
   });
 
-  factory OrderStatusHistory.fromJson(Map<String, dynamic> json) =>
-      _$OrderStatusHistoryFromJson(json);
+  factory OrderStatusHistory.fromJson(Map<String, dynamic> json) {
+    return OrderStatusHistory(
+      status: json['status'] as String? ?? '',
+      changedAt: DateTime.tryParse(json['changed_at'] as String? ?? '') ??
+          DateTime.now(),
+      message: json['message'] as String?,
+    );
+  }
 
-  Map<String, dynamic> toJson() => _$OrderStatusHistoryToJson(this);
+  Map<String, dynamic> toJson() => {
+        'status': status,
+        'changed_at': changedAt.toIso8601String(),
+        'message': message,
+      };
 
   @override
   List<Object?> get props => [status, changedAt, message];

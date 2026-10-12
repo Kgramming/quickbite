@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/user.dart';
 import '../services/api_client.dart';
@@ -74,10 +75,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final response = await apiClient.login({
-        'email': email,
-        'password': password,
-      });
+      final response = await apiClient.login(
+        email: email,
+        password: password,
+      );
 
       await localStorageService.saveToken(response.accessToken);
       await localStorageService.saveUser(jsonEncode(response.user));

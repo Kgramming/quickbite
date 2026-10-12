@@ -1,23 +1,13 @@
 import 'package:equatable/equatable.dart';
-import 'package:json_annotation/json_annotation.dart';
 
-part 'restaurant.g.dart';
-
-@JsonSerializable()
 class Restaurant extends Equatable {
   final String id;
   final String name;
   final String description;
   final String cuisine;
   final double rating;
-
-  @JsonKey(name: 'delivery_time_minutes')
   final int deliveryTimeMinutes;
-
-  @JsonKey(name: 'delivery_fee_minor')
   final int deliveryFeeMinor;
-
-  @JsonKey(name: 'is_open')
   final bool isOpen;
 
   const Restaurant({
@@ -31,10 +21,29 @@ class Restaurant extends Equatable {
     required this.isOpen,
   });
 
-  factory Restaurant.fromJson(Map<String, dynamic> json) =>
-      _$RestaurantFromJson(json);
+  factory Restaurant.fromJson(Map<String, dynamic> json) {
+    return Restaurant(
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      cuisine: json['cuisine'] as String? ?? '',
+      rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
+      deliveryTimeMinutes: json['delivery_time_minutes'] as int? ?? 0,
+      deliveryFeeMinor: json['delivery_fee_minor'] as int? ?? 0,
+      isOpen: json['is_open'] as bool? ?? false,
+    );
+  }
 
-  Map<String, dynamic> toJson() => _$RestaurantToJson(this);
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'description': description,
+        'cuisine': cuisine,
+        'rating': rating,
+        'delivery_time_minutes': deliveryTimeMinutes,
+        'delivery_fee_minor': deliveryFeeMinor,
+        'is_open': isOpen,
+      };
 
   String get deliveryFee {
     final rupees = deliveryFeeMinor ~/ 100;
@@ -55,14 +64,10 @@ class Restaurant extends Equatable {
       ];
 }
 
-@JsonSerializable()
 class PaginatedRestaurants extends Equatable {
   final List<Restaurant> items;
   final int page;
-
-  @JsonKey(name: 'page_size')
   final int pageSize;
-
   final int total;
 
   const PaginatedRestaurants({
@@ -72,24 +77,36 @@ class PaginatedRestaurants extends Equatable {
     required this.total,
   });
 
-  factory PaginatedRestaurants.fromJson(Map<String, dynamic> json) =>
-      _$PaginatedRestaurantsFromJson(json);
+  factory PaginatedRestaurants.fromJson(Map<String, dynamic> json) {
+    final itemsList = json['items'] as List? ?? [];
+    final restaurants = itemsList
+        .map((item) => Restaurant.fromJson(item as Map<String, dynamic>))
+        .toList();
 
-  Map<String, dynamic> toJson() => _$PaginatedRestaurantsToJson(this);
+    return PaginatedRestaurants(
+      items: restaurants,
+      page: json['page'] as int? ?? 1,
+      pageSize: json['page_size'] as int? ?? 20,
+      total: json['total'] as int? ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'items': items.map((item) => item.toJson()).toList(),
+        'page': page,
+        'page_size': pageSize,
+        'total': total,
+      };
 
   @override
   List<Object?> get props => [items, page, pageSize, total];
 }
 
-@JsonSerializable()
 class MenuItem extends Equatable {
   final String id;
   final String name;
   final String description;
-
-  @JsonKey(name: 'price_minor')
   final int priceMinor;
-
   final bool available;
   final String? image;
 
@@ -102,10 +119,25 @@ class MenuItem extends Equatable {
     this.image,
   });
 
-  factory MenuItem.fromJson(Map<String, dynamic> json) =>
-      _$MenuItemFromJson(json);
+  factory MenuItem.fromJson(Map<String, dynamic> json) {
+    return MenuItem(
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      priceMinor: json['price_minor'] as int? ?? 0,
+      available: json['available'] as bool? ?? false,
+      image: json['image'] as String?,
+    );
+  }
 
-  Map<String, dynamic> toJson() => _$MenuItemToJson(this);
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'description': description,
+        'price_minor': priceMinor,
+        'available': available,
+        'image': image,
+      };
 
   String get price {
     final rupees = priceMinor ~/ 100;
@@ -118,17 +150,11 @@ class MenuItem extends Equatable {
       [id, name, description, priceMinor, available, image];
 }
 
-@JsonSerializable()
 class RestaurantMenu extends Equatable {
-  @JsonKey(name: 'restaurant_id')
   final String restaurantId;
-
   final List<MenuItem> items;
   final int page;
-
-  @JsonKey(name: 'page_size')
   final int pageSize;
-
   final int total;
 
   const RestaurantMenu({
@@ -139,10 +165,28 @@ class RestaurantMenu extends Equatable {
     required this.total,
   });
 
-  factory RestaurantMenu.fromJson(Map<String, dynamic> json) =>
-      _$RestaurantMenuFromJson(json);
+  factory RestaurantMenu.fromJson(Map<String, dynamic> json) {
+    final itemsList = json['items'] as List? ?? [];
+    final menuItems = itemsList
+        .map((item) => MenuItem.fromJson(item as Map<String, dynamic>))
+        .toList();
 
-  Map<String, dynamic> toJson() => _$RestaurantMenuToJson(this);
+    return RestaurantMenu(
+      restaurantId: json['restaurant_id'] as String? ?? '',
+      items: menuItems,
+      page: json['page'] as int? ?? 1,
+      pageSize: json['page_size'] as int? ?? 50,
+      total: json['total'] as int? ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'restaurant_id': restaurantId,
+        'items': items.map((item) => item.toJson()).toList(),
+        'page': page,
+        'page_size': pageSize,
+        'total': total,
+      };
 
   @override
   List<Object?> get props =>

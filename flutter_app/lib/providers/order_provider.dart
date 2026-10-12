@@ -1,26 +1,26 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../models/order.dart';
 import '../services/api_client.dart';
-import 'auth_provider.dart';
 
 final ordersListProvider = FutureProvider.family<PaginatedOrders, int>(
   (ref, page) async {
-    final apiClient = ref.watch(authenticatedApiClientProvider);
-    return apiClient.getOrders(page, 20);
+    final apiClient = ref.watch(apiClientProvider);
+    return apiClient.getOrders(page: page, pageSize: 20);
   },
 );
 
 final orderDetailProvider = FutureProvider.family<Order, String>(
   (ref, orderId) async {
-    final apiClient = ref.watch(authenticatedApiClientProvider);
+    final apiClient = ref.watch(apiClientProvider);
     return apiClient.getOrder(orderId);
   },
 );
 
 final orderHistoryProvider = FutureProvider.family<List<OrderStatusHistory>, String>(
   (ref, orderId) async {
-    final apiClient = ref.watch(authenticatedApiClientProvider);
+    final apiClient = ref.watch(apiClientProvider);
     return apiClient.getOrderHistory(orderId);
   },
 );
@@ -29,8 +29,8 @@ final orderNotificationsProvider =
     FutureProvider.family<List<OrderNotification>, (String, int)>(
   (ref, params) async {
     final (orderId, page) = params;
-    final apiClient = ref.watch(authenticatedApiClientProvider);
-    return apiClient.getOrderNotifications(orderId, page, 50);
+    final apiClient = ref.watch(apiClientProvider);
+    return apiClient.getOrderNotifications(orderId: orderId, page: page, pageSize: 50);
   },
 );
 
@@ -83,15 +83,14 @@ class CheckoutNotifier extends StateNotifier<CheckoutState> {
   }) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      const idempotencyKey = Uuid().v4();
+      final idempotencyKey = Uuid().v4();
 
-      final orderRequest = {
-        'restaurant_id': restaurantId,
-        'delivery_address': deliveryAddress,
-        'items': items,
-      };
-
-      final order = await apiClient.createOrder(orderRequest, idempotencyKey);
+      final order = await apiClient.createOrder(
+        restaurantId: restaurantId,
+        deliveryAddress: deliveryAddress,
+        items: items,
+        idempotencyKey: idempotencyKey,
+      );
 
       state = state.copyWith(
         orderId: order.id,
@@ -151,7 +150,7 @@ final checkoutProvider =
 // Auto-refresh order status
 final orderStatusRefreshProvider = StreamProvider.family<Order, String>(
   (ref, orderId) async* {
-    final apiClient = ref.watch(authenticatedApiClientProvider);
+    final apiClient = ref.watch(apiClientProvider);
 
     while (true) {
       try {

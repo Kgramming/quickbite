@@ -110,7 +110,7 @@ class OrderTrackingScreen extends ConsumerWidget {
                       children: [
                         Text('${item.name} x${item.quantity}'),
                         Text(
-                          '₹${(item.priceminor / 100).toStringAsFixed(2)}',
+                          '₹${(item.priceMinor / 100).toStringAsFixed(2)}',
                         ),
                       ],
                     ),
@@ -134,7 +134,7 @@ class OrderTrackingScreen extends ConsumerWidget {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.1),
+                      color: Colors.red.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: Colors.red),
                     ),

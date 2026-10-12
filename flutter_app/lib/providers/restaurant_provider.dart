@@ -4,15 +4,15 @@ import '../services/api_client.dart';
 
 final restaurantsProvider =
     FutureProvider.family<PaginatedRestaurants, int>((ref, page) async {
-  final apiClient = ref.watch(authenticatedApiClientProvider);
-  return apiClient.getRestaurants(page, 20);
+  final apiClient = ref.watch(apiClientProvider);
+  return apiClient.getRestaurants(page: page, pageSize: 20);
 });
 
 final restaurantMenuProvider = FutureProvider.family<RestaurantMenu, (String, int)>(
     (ref, params) async {
   final (restaurantId, page) = params;
-  final apiClient = ref.watch(authenticatedApiClientProvider);
-  return apiClient.getRestaurantMenu(restaurantId, page, 50);
+  final apiClient = ref.watch(apiClientProvider);
+  return apiClient.getRestaurantMenu(restaurantId: restaurantId, page: page, pageSize: 50);
 });
 
 // Cart state management

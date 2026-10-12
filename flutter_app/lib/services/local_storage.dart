@@ -1,7 +1,6 @@
 import 'package:hive/hive.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../config/app_config.dart';
-import '../models/user.dart';
 
 class LocalStorageService {
   static const String _tokenBoxName = 'quickbite_tokens';
