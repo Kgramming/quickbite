@@ -1,7 +1,7 @@
 # Dockerfile for QuickBite workers (Phase 2)
 # This builds a container for running the four independent worker consumers
 
-FROM python:3.13-slim
+FROM python:3.12
 
 WORKDIR /app
 
