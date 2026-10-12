@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import Column, DateTime, Enum as SQLEnum, String, Text, UniqueConstraint
+from sqlalchemy import Column, DateTime, Enum as SQLEnum, Integer, String, Text, UniqueConstraint
 
 from app.database import Base
 
@@ -47,6 +47,14 @@ class Order(Base):
     status = Column(SQLEnum(OrderStatus), nullable=False, default=OrderStatus.PENDING)
     total_amount = Column(String(10), nullable=False)  # Store as string to avoid float precision issues
     payment_status = Column(String(50), nullable=True)  # null, "pending", "success", "failed"
+
+    # API v1 fields (nullable for backward compat with legacy orders)
+    user_id = Column(String(36), nullable=True, index=True)  # FK -> users.id
+    restaurant_id = Column(String(36), nullable=True, index=True)  # FK -> restaurants.id
+    currency = Column(String(3), nullable=True, default="INR")
+    total_amount_minor = Column(Integer, nullable=True)  # e.g. 24999 = INR 249.99
+    version = Column(Integer, nullable=False, default=1)  # optimistic locking
+    failure_code = Column(String(100), nullable=True)  # stable code for FAILED/PAYMENT_FAILED
 
     # Idempotency key for duplicate request prevention
     idempotency_key = Column(String(255), nullable=True, unique=True, index=True)

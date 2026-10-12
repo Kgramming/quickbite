@@ -5,16 +5,18 @@ from contextlib import asynccontextmanager
 
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import select
 
 from app import __version__
 from app.config import settings
-from app.database import close_db, init_db
+from app.database import close_db, get_session, init_db
 from app.ops import router as ops_router
-from app.routes import router
+from app.routes import _check_rabbitmq, router
+from app.v1.routes import router as v1_router
 
 # Configure logging
 logging.basicConfig(level=settings.log_level.upper())
@@ -45,18 +47,44 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Add CORS middleware
+# Add CORS middleware — explicit origins only (no wildcard with credentials)
+_cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
+    expose_headers=["Location"],
 )
 
 # Include routes
 app.include_router(router)
 app.include_router(ops_router)
+app.include_router(v1_router)
+
+
+@app.get("/health/live", tags=["health"])
+async def health_live():
+    """Liveness probe — process is running. No dependency checks."""
+    return {"status": "ok"}
+
+
+@app.get("/health/ready", tags=["health"])
+async def health_ready(session=Depends(get_session)):
+    """Readiness probe — real dependency checks. 503 if a dependency is down."""
+    try:
+        session.execute(select(1)).fetchone()
+        db = "healthy"
+    except Exception as e:
+        db = f"unhealthy: {str(e)[:50]}"
+    rabbit = await _check_rabbitmq()
+    ok = db == "healthy" and rabbit == "healthy"
+    return JSONResponse(
+        status_code=200 if ok else 503,
+        content={"status": "ok" if ok else "degraded",
+                 "database": db, "rabbitmq": rabbit},
+    )
 
 # Demo console (single-file UI, no build step)
 _STATIC_DIR = Path(__file__).resolve().parent / "static"

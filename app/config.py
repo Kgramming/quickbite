@@ -26,6 +26,14 @@ class Settings(BaseSettings):
     environment: str = "development"
     debug: bool = False
 
+    # Auth (JWT)
+    jwt_secret: str = "dev-only-secret-change-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_hours: int = 24
+
+    # CORS — explicit origins (no wildcard with credentials)
+    cors_origins: str = "http://localhost:3000,http://localhost:8080,http://localhost:5173"
+
     class Config:
         env_file = ".env"
         case_sensitive = False

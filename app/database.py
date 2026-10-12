@@ -26,6 +26,19 @@ SessionLocal = sessionmaker(
 # Import all models to register them with Base
 from app.idempotency import ProcessedEvent  # noqa: F401, E402
 from app.models import Order, OrderStatus, OutboxEvent  # noqa: F401, E402
+from app.v1.models import (  # noqa: F401, E402
+    DriverAssignment,
+    IdempotencyRecord,
+    MenuItem,
+    Notification,
+    OrderItem,
+    OrderStatusHistory,
+    QuarantineRecord,
+    Restaurant,
+    RetryJob,
+    SimulatedPayment,
+    User,
+)
 
 
 def get_session():

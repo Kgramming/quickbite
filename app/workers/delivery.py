@@ -21,6 +21,8 @@ from app.database import SessionLocal
 from app.idempotency import claim_event
 from app.models import Order, OrderStatus, OutboxEvent
 from app.retry import NonRetryableError
+from app.v1.models import DriverAssignment
+from app.v1.worker_helpers import record_transition
 from app.worker_common import run_worker
 
 logger = logging.getLogger(__name__)
@@ -85,9 +87,12 @@ async def process_delivery_event(body: bytes, session: Optional[Session] = None)
         # Assign driver
         driver_id = await _assign_driver(order)
 
-        # Update order to DRIVER_ASSIGNED
-        order.status = OrderStatus.DRIVER_ASSIGNED
+        # Versioned transition to DRIVER_ASSIGNED + history + assignment record
+        record_transition(session, order, OrderStatus.DRIVER_ASSIGNED)
         session.add(order)
+        session.add(DriverAssignment(
+            order_id=order.id, driver_name=f"Driver {driver_id[:8]}",
+        ))
 
         # Create order.driver.assigned outbox event
         event_data = {

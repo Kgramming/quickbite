@@ -23,6 +23,8 @@ from app.database import SessionLocal
 from app.idempotency import claim_event
 from app.models import Order, OrderStatus, OutboxEvent
 from app.retry import NonRetryableError
+from app.v1.models import SimulatedPayment
+from app.v1.worker_helpers import record_transition
 from app.worker_common import run_worker
 
 logger = logging.getLogger(__name__)
@@ -86,21 +88,30 @@ async def process_payment_event(body: bytes, session: Optional[Session] = None) 
             session.commit()
             return True
 
-        # Simulate payment processing
+        # Simulate payment processing (uses minor units when available)
         payment_success = await _charge_payment(order)
 
+        amount_minor = order.total_amount_minor
+        if amount_minor is None:
+            # Legacy order: derive minor units from decimal string
+            amount_minor = int(round(float(order.total_amount) * 100))
+
         if payment_success:
-            # Update order to PAID
-            order.status = OrderStatus.PAID
+            # Versioned transition to PAID + history
+            record_transition(session, order, OrderStatus.PAID)
             order.payment_status = "success"
             session.add(order)
+            session.add(SimulatedPayment(
+                order_id=order.id, amount_minor=amount_minor,
+                currency=order.currency or "INR", status="success",
+            ))
 
             # Create order.paid outbox event
             event_data = {
                 "event_id": str(uuid.uuid4()),
                 "event_type": "order.paid",
                 "order_id": order.id,
-                "amount": order.total_amount,
+                "amount_minor": amount_minor,
                 "transaction_id": str(uuid.uuid4()),
             }
             session.add(
@@ -112,10 +123,16 @@ async def process_payment_event(body: bytes, session: Optional[Session] = None) 
                 )
             )
         else:
-            # Update order to PAYMENT_FAILED
-            order.status = OrderStatus.PAYMENT_FAILED
+            # Versioned transition to PAYMENT_FAILED + history
+            record_transition(session, order, OrderStatus.PAYMENT_FAILED)
             order.payment_status = "failed"
+            order.failure_code = "PAYMENT_DECLINED"
             session.add(order)
+            session.add(SimulatedPayment(
+                order_id=order.id, amount_minor=amount_minor,
+                currency=order.currency or "INR", status="failed",
+                failure_code="PAYMENT_DECLINED",
+            ))
 
             # Create order.payment.failed outbox event
             event_data = {

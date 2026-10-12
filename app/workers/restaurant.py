@@ -21,6 +21,7 @@ from app.database import SessionLocal
 from app.idempotency import claim_event
 from app.models import Order, OrderStatus, OutboxEvent
 from app.retry import NonRetryableError
+from app.v1.worker_helpers import record_transition
 from app.worker_common import run_worker
 
 logger = logging.getLogger(__name__)
@@ -85,8 +86,8 @@ async def process_restaurant_event(body: bytes, session: Optional[Session] = Non
         # Confirm with restaurant
         await _confirm_with_restaurant(order)
 
-        # Update order to CONFIRMED
-        order.status = OrderStatus.CONFIRMED
+        # Versioned transition to CONFIRMED + history
+        record_transition(session, order, OrderStatus.CONFIRMED)
         session.add(order)
 
         # Create order.confirmed outbox event
