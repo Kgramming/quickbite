@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QuickBite — Live Demo Console</title>
+<style>
+  :root {
+    --bg: #0a0a0b;
+    --card: #131316;
+    --card2: #17171b;
+    --border: #26262b;
+    --text: #e8e8ea;
+    --muted: #8b8b93;
+    --amber: #FFC20E;
+    --green: #34d399;
+    --red: #f87171;
+    --blue: #4da3ff;
+    --mono: "SF Mono", "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+    font-size: 14px; line-height: 1.45; padding: 16px;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 18px; background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;
+  }
+  header h1 { font-size: 18px; font-weight: 700; letter-spacing: .3px; }
+  header h1 .bolt { color: var(--amber); }
+  header h1 small { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 8px; }
+  .health { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--card2); border: 1px solid var(--border);
+    border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 600;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .dot.bad { background: var(--red); box-shadow: 0 0 8px var(--red); }
+  .grid {
+    display: grid; grid-template-columns: 300px 1fr 320px; gap: 14px;
+    margin-bottom: 14px;
+  }
+  @media (max-width: 1100px) { .grid { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px;
+  }
+  .card h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 1.2px;
+    color: var(--muted); margin-bottom: 12px; font-weight: 700;
+  }
+  .card h2 .amber { color: var(--amber); }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+  input, select {
+    width: 100%; background: var(--card2); border: 1px solid var(--border);
+    color: var(--text); border-radius: 8px; padding: 9px 10px; font-size: 13px;
+  }
+  input:focus { outline: none; border-color: var(--amber); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  button {
+    cursor: pointer; border: none; border-radius: 8px; font-weight: 700;
+    font-size: 13px; padding: 10px 14px; transition: transform .06s, opacity .15s;
+  }
+  button:active { transform: scale(.98); }
+  .btn-primary { background: var(--amber); color: #111; width: 100%; margin-top: 12px; }
+  .btn-primary:hover { opacity: .92; }
+  .btn-chaos {
+    background: var(--card2); color: var(--text); border: 1px solid var(--border);
+    width: 100%; margin-top: 8px; text-align: left; font-weight: 600;
+  }
+  .btn-chaos:hover { border-color: var(--red); }
+  .btn-chaos .tag {
+    display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 5px;
+    background: #3a2b2b; color: var(--red); margin-right: 8px; font-weight: 700;
+  }
+  .btn-chaos small { display: block; color: var(--muted); font-weight: 400; margin-top: 3px; font-size: 11px; }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 10px; }
+  .hint code { color: var(--amber); font-family: var(--mono); }
+
+  /* order cards */
+  #orders { display: flex; flex-direction: column; gap: 8px; max-height: 560px; overflow-y: auto; }
+  .order {
+    background: var(--card2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; cursor: pointer; transition: border-color .15s;
+  }
+  .order:hover { border-color: var(--amber); }
+  .order.sel { border-color: var(--amber); }
+  .order .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .order .id { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .order .meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .pill {
+    font-size: 10px; font-weight: 800; letter-spacing: .6px; padding: 3px 9px;
+    border-radius: 999px; white-space: nowrap;
+  }
+  .st-PENDING { background: #2a2a30; color: #b9b9c0; }
+  .st-PAID { background: #1d2f45; color: var(--blue); }
+  .st-CONFIRMED { background: #3a2f10; color: var(--amber); }
+  .st-DRIVER_ASSIGNED { background: #12352a; color: var(--green); }
+  .st-PAYMENT_FAILED, .st-FAILED { background: #3d1d1d; color: var(--red); }
+  .st-CANCELLED { background: #2a2a30; color: var(--muted); }
+  .empty { color: var(--muted); text-align: center; padding: 30px 10px; font-size: 13px; }
+
+  /* pipeline */
+  .pipe-row {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    background: var(--card2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 9px 10px; font-size: 12px;
+  }
+  .pipe-row .qname { font-family: var(--mono); font-size: 11px; flex: 1; }
+  .pipe-row .arrow { color: var(--amber); font-weight: 700; }
+  .pipe-row .worker { color: var(--muted); }
+  .depth {
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    background: #1d2f45; color: var(--blue); border-radius: 6px; padding: 2px 8px;
+  }
+  .depth.hot { background: #3d1d1d; color: var(--red); animation: pulse 1.2s infinite; }
+  @keyframes pulse { 50% { opacity: .55; } }
+  .cons { font-size: 10px; color: var(--muted); }
+  .dlq-card {
+    margin-top: 10px; border: 1px dashed #4a2c2c; border-radius: 10px;
+    padding: 10px 12px; background: #171214;
+  }
+  .dlq-card h3 { font-size: 11px; color: var(--red); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .dlq-card .n { font-size: 22px; font-weight: 800; font-family: var(--mono); }
+
+  /* event log */
+  #log {
+    background: #0d0d0f; border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; height: 220px; overflow-y: auto;
+    font-family: var(--mono); font-size: 12px;
+  }
+  #log .line { padding: 2px 0; border-bottom: 1px solid #16161a; }
+  #log .t { color: var(--muted); margin-right: 10px; }
+  #log .ev { color: var(--amber); font-weight: 700; }
+  #log .ev.order\\.paid { color: var(--blue); }
+  #log .unpub { color: var(--red); }
+
+  /* modal */
+  #modal-back {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65);
+    align-items: center; justify-content: center; z-index: 50; padding: 20px;
+  }
+  #modal {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    max-width: 560px; width: 100%; max-height: 80vh; overflow-y: auto; padding: 20px;
+  }
+  #modal h3 { margin-bottom: 4px; }
+  #modal .sub { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 14px; }
+  .tl { position: relative; padding-left: 22px; }
+  .tl::before { content: ""; position: absolute; left: 7px; top: 6px; bottom: 6px; width: 2px; background: var(--border); }
+  .tl .ev-row { position: relative; padding: 7px 0; font-size: 13px; }
+  .tl .ev-row::before {
+    content: ""; position: absolute; left: -19px; top: 12px; width: 10px; height: 10px;
+    border-radius: 50%; background: var(--amber);
+  }
+  .tl .ev-row.done::before { background: var(--green); }
+  .tl .ev-row .et { font-family: var(--mono); font-weight: 700; font-size: 12px; }
+  .tl .ev-row .ts { color: var(--muted); font-size: 11px; margin-left: 8px; }
+  .tl .ev-row .pub { font-size: 10px; margin-left: 8px; padding: 1px 6px; border-radius: 4px; background: var(--card2); color: var(--muted); }
+  .tl .ev-row .pub.y { color: var(--green); }
+  #modal-close { margin-top: 14px; width: 100%; background: var(--card2); color: var(--text); border: 1px solid var(--border); }
+
+  /* toast */
+  #toasts { position: fixed; bottom: 18px; right: 18px; z-index: 99; display: flex; flex-direction: column; gap: 8px; }
+  .toast {
+    background: var(--card2); border: 1px solid var(--amber); color: var(--text);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px; max-width: 320px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.5); animation: slidein .18s ease-out;
+  }
+  .toast.err { border-color: var(--red); }
+  @keyframes slidein { from { transform: translateX(20px); opacity: 0; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="bolt">⚡</span> QuickBite <small>live demo console</small></h1>
+  <div class="health" id="health">
+    <span class="badge"><span class="dot" id="dot-api"></span>API</span>
+    <span class="badge"><span class="dot" id="dot-db"></span>Database</span>
+    <span class="badge"><span class="dot" id="dot-rmq"></span>RabbitMQ</span>
+    <span class="badge" id="clock" style="font-family:var(--mono)"></span>
+  </div>
+</header>
+
+<div class="grid">
+  <!-- LEFT: order form + chaos -->
+  <div class="card">
+    <h2><span class="amber">●</span> New order</h2>
+    <form id="order-form">
+      <label>Customer name</label>
+      <input id="f-name" value="Aarav Sharma" required maxlength="255">
+      <div class="row2">
+        <div><label>Phone</label><input id="f-phone" value="9876543210" required minlength="10" maxlength="20"></div>
+        <div><label>Total (₹)</label><input id="f-total" value="249.99" required pattern="^\d+\.\d{2}$"></div>
+      </div>
+      <label>Email</label>
+      <input id="f-email" type="email" value="aarav@example.com" required>
+      <label>Address</label>
+      <input id="f-addr" value="42, MG Road, Mumbai" required minlength="5">
+      <label>Item</label>
+      <div class="row2">
+        <div><input id="f-item" value="Paneer Tikka Pizza" required></div>
+        <div><input id="f-qty" type="number" value="1" min="1" max="20" title="Qty"></div>
+      </div>
+      <button class="btn-primary" type="submit">Place order →</button>
+    </form>
+    <p class="hint">Tip: total <code>999.99</code> triggers the mock payment decline.</p>
+
+    <h2 style="margin-top:18px"><span class="amber">●</span> Chaos lab</h2>
+    <button class="btn-chaos" id="chaos-fail"><span class="tag">FAIL</span>Payment-failure order<small>Places a ₹999.99 order → PAYMENT_FAILED, never advances.</small></button>
+    <button class="btn-chaos" id="chaos-poison"><span class="tag">POISON</span>Poison message<small>Publishes an unparseable message → watch the DLQ counter jump.</small></button>
+    <button class="btn-chaos" id="chaos-dup"><span class="tag">DUP</span>Duplicate delivery<small>Republishes the selected order's <span style="font-family:var(--mono)">order.created</span> → idempotency absorbs it.</small></button>
+  </div>
+
+  <!-- CENTER: live orders -->
+  <div class="card">
+    <h2><span class="amber">●</span> Live orders <span id="order-count" style="color:var(--muted)"></span></h2>
+    <div id="orders"><div class="empty">No orders yet — place one from the left panel.</div></div>
+  </div>
+
+  <!-- RIGHT: pipeline -->
+  <div>
+    <div class="card">
+      <h2><span class="amber">●</span> Message pipeline</h2>
+      <div id="pipeline"></div>
+      <div class="dlq-card">
+        <h3>☠ Dead-letter queue</h3>
+        <div><span class="n" id="dlq-n">0</span> <span style="color:var(--muted);font-size:12px">poison / exhausted messages</span></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h2><span class="amber">●</span> Routing keys</h2>
+      <div style="font-family:var(--mono);font-size:11.5px;color:var(--muted);line-height:1.9">
+        order.created → <span style="color:var(--text)">payment.queue</span><br>
+        order.paid → <span style="color:var(--text)">restaurant.queue</span><br>
+        order.confirmed → <span style="color:var(--text)">delivery.queue</span><br>
+        order.payment.failed → <span style="color:var(--text)">(terminal)</span><br>
+        order.# → <span style="color:var(--text)">notification.queue</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:14px">
+  <h2><span class="amber">●</span> Event stream</h2>
+  <div id="log"><div class="line empty-line"><span class="t">--:--:--</span> waiting for events…</div></div>
+</div>
+
+<div id="modal-back">
+  <div id="modal">
+    <h3>Order timeline</h3>
+    <div class="sub" id="modal-sub"></div>
+    <div class="tl" id="modal-tl"></div>
+    <button id="modal-close">Close</button>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, {
+    headers: { "Content-Type": "application/json" },
+    ...opts,
+  });
+  if (!r.ok) {
+    let msg = r.statusText;
+    try { const j = await r.json(); msg = j.detail || msg; } catch (e) {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+function toast(msg, err = false) {
+  const t = document.createElement("div");
+  t.className = "toast" + (err ? " err" : "");
+  t.textContent = msg;
+  $("#toasts").appendChild(t);
+  setTimeout(() => t.remove(), 4200);
+}
+
+function setDot(id, healthy) {
+  const d = document.getElementById(id);
+  d.className = "dot " + (healthy ? "ok" : "bad");
+}
+
+const STATUS_LABEL = {
+  PENDING: "PENDING", PAID: "PAID", CONFIRMED: "CONFIRMED",
+  DRIVER_ASSIGNED: "DRIVER ASSIGNED", PAYMENT_FAILED: "PAYMENT FAILED",
+  FAILED: "FAILED", CANCELLED: "CANCELLED",
+};
+const pill = (s) => `<span class="pill st-${s}">${STATUS_LABEL[s] || s}</span>`;
+const shortId = (id) => id.slice(0, 8);
+const tstr = (iso) => iso ? new Date(iso).toLocaleTimeString("en-GB") : "—";
+
+// ---------- health ----------
+async function pollHealth() {
+  try {
+    const h = await api("/health");
+    setDot("dot-api", true);
+    setDot("dot-db", h.database === "healthy");
+    setDot("dot-rmq", h.rabbitmq === "healthy");
+  } catch (e) { setDot("dot-api", false); setDot("dot-db", false); setDot("dot-rmq", false); }
+}
+
+// ---------- orders ----------
+let selectedOrder = null;
+const seenOrders = new Map();
+
+async function pollOrders() {
+  let orders;
+  try { orders = await api("/api/orders?limit=20"); }
+  catch (e) { return; }
+  $("#order-count").textContent = `(${orders.length})`;
+  const box = $("#orders");
+  if (!orders.length) {
+    box.innerHTML = '<div class="empty">No orders yet — place one from the left panel.</div>';
+    return;
+  }
+  // track status transitions for the event log
+  for (const o of orders) {
+    const prev = seenOrders.get(o.id);
+    if (prev && prev !== o.status) {
+      logLine(`${shortId(o.id)} status: ${prev} → ${o.status}`, "ev");
+    }
+    seenOrders.set(o.id, o.status);
+  }
+  box.innerHTML = orders.map((o) => `
+    <div class="order ${selectedOrder === o.id ? "sel" : ""}" data-id="${o.id}">
+      <div class="top"><span class="id">#${shortId(o.id)}</span>${pill(o.status)}</div>
+      <div class="meta">${esc(o.customer_name)} · ₹${o.total_amount} · ${tstr(o.created_at)}</div>
+    </div>`).join("");
+  box.querySelectorAll(".order").forEach((el) =>
+    el.addEventListener("click", () => openTimeline(el.dataset.id)));
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// ---------- pipeline ----------
+const PIPE = [
+  { queue: "payment.queue", worker: "payment", key: "order.created" },
+  { queue: "restaurant.queue", worker: "restaurant", key: "order.paid" },
+  { queue: "delivery.queue", worker: "delivery", key: "order.confirmed" },
+  { queue: "notification.queue", worker: "notification", key: "order.#" },
+];
+
+async function pollQueues() {
+  let depths;
+  try { depths = await api("/api/queues"); }
+  catch (e) { return; }
+  const byName = Object.fromEntries(depths.map((d) => [d.name, d]));
+  $("#pipeline").innerHTML = PIPE.map((p) => {
+    const d = byName[p.queue] || { messages: 0, consumers: 0 };
+    const hot = d.messages > 0 ? "hot" : "";
+    return `<div class="pipe-row">
+      <span class="qname">${p.queue}<br><span style="color:var(--muted);font-size:10px">${p.key}</span></span>
+      <span class="depth ${hot}" title="messages waiting">${d.messages}</span>
+      <span class="arrow">→</span>
+      <span class="worker">${p.worker}<br><span class="cons">${d.consumers} consumer${d.consumers === 1 ? "" : "s"}</span></span>
+    </div>`;
+  }).join("");
+  const dlq = byName["orders.dead-letter.queue"];
+  const n = dlq ? dlq.messages : 0;
+  const el = $("#dlq-n");
+  if (el.textContent !== String(n)) {
+    el.textContent = n;
+    if (n > 0) toast(`☠ ${n} message${n === 1 ? "" : "s"} in the dead-letter queue`);
+  }
+}
+
+// ---------- event stream ----------
+const seenEvents = new Set();
+function logLine(text, cls = "") {
+  const log = $("#log");
+  if (log.querySelector(".empty-line")) log.innerHTML = "";
+  const div = document.createElement("div");
+  div.className = "line";
+  const t = new Date().toLocaleTimeString("en-GB");
+  div.innerHTML = `<span class="t">${t}</span><span class="${cls}">${esc(text)}</span>`;
+  log.prepend(div);
+  while (log.children.length > 60) log.lastChild.remove();
+}
+
+async function pollEvents() {
+  let events;
+  try { events = await api("/api/events/recent?limit=40"); }
+  catch (e) { return; }
+  // oldest first for chronological prepend
+  for (const e of [...events].reverse()) {
+    if (seenEvents.has(e.id)) continue;
+    seenEvents.add(e.id);
+    const unpub = e.published === "Y" ? "" : ' <span class="unpub">(unpublished)</span>';
+    logLine(`${e.event_type}  · order ${e.id.slice(0, 8)}…${unpub}`, "ev");
+  }
+}
+
+// ---------- timeline modal ----------
+async function openTimeline(orderId) {
+  selectedOrder = orderId;
+  document.querySelectorAll(".order").forEach((el) =>
+    el.classList.toggle("sel", el.dataset.id === orderId));
+  $("#modal-sub").textContent = "order " + orderId;
+  $("#modal-tl").innerHTML = '<div style="color:var(--muted)">loading…</div>';
+  $("#modal-back").style.display = "flex";
+  try {
+    const events = await api(`/api/orders/${orderId}/events`);
+    $("#modal-tl").innerHTML = events.length ? events.map((e, i) => `
+      <div class="ev-row ${i < events.length - 1 ? "done" : ""}">
+        <span class="et">${e.event_type}</span>
+        <span class="ts">${tstr(e.created_at)}</span>
+        <span class="pub ${e.published === "Y" ? "y" : ""}">${e.published === "Y" ? "published" : "pending"}</span>
+      </div>`).join("")
+      : '<div style="color:var(--muted)">No events yet.</div>';
+  } catch (e) {
+    $("#modal-tl").innerHTML = `<div style="color:var(--red)">Failed to load: ${esc(e.message)}</div>`;
+  }
+}
+$("#modal-close").addEventListener("click", () => {
+  $("#modal-back").style.display = "none";
+  selectedOrder = null;
+  document.querySelectorAll(".order").forEach((el) => el.classList.remove("sel"));
+});
+$("#modal-back").addEventListener("click", (e) => {
+  if (e.target.id === "modal-back") $("#modal-close").click();
+});
+
+// ---------- order form ----------
+$("#order-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const qty = parseInt($("#f-qty").value, 10) || 1;
+  const total = $("#f-total").value;
+  const price = (parseFloat(total) / qty).toFixed(2);
+  const body = {
+    customer_name: $("#f-name").value.trim(),
+    customer_email: $("#f-email").value.trim(),
+    customer_phone: $("#f-phone").value.trim(),
+    delivery_address: $("#f-addr").value.trim(),
+    items: [{ name: $("#f-item").value.trim(), quantity: qty, price }],
+    total_amount: total,
+  };
+  try {
+    const o = await api("/orders", { method: "POST", body: JSON.stringify(body) });
+    toast(`Order #${shortId(o.id)} placed — watch it flow →`);
+    pollOrders();
+  } catch (err) { toast("Order failed: " + err.message, true); }
+});
+
+// ---------- chaos ----------
+$("#chaos-fail").addEventListener("click", async () => {
+  $("#f-total").value = "999.99";
+  $("#order-form").requestSubmit();
+  toast("Payment-failure order placed (₹999.99) — expect PAYMENT_FAILED");
+});
+$("#chaos-poison").addEventListener("click", async () => {
+  try {
+    await api("/api/chaos/poison", { method: "POST" });
+    toast("☠ Poison message published — watch the DLQ counter");
+  } catch (e) { toast("Poison failed: " + e.message, true); }
+});
+$("#chaos-dup").addEventListener("click", async () => {
+  if (!selectedOrder) { toast("Select an order first (click its card)", true); return; }
+  try {
+    const r = await api(`/api/chaos/duplicate/${selectedOrder}`, { method: "POST" });
+    toast(`Duplicate order.created republished (event ${String(r.event_id).slice(0, 8)}…) — idempotency absorbs it`);
+  } catch (e) { toast("Duplicate failed: " + e.message, true); }
+});
+
+// ---------- clock + loops ----------
+setInterval(() => {
+  $("#clock").textContent = new Date().toLocaleTimeString("en-GB");
+}, 1000);
+
+pollHealth(); pollOrders(); pollQueues(); pollEvents();
+setInterval(pollHealth, 3000);
+setInterval(pollOrders, 1500);
+setInterval(pollQueues, 2000);
+setInterval(pollEvents, 2000);
+</script>
+</body>
+</html>
