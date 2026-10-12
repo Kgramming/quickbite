@@ -1,17 +1,14 @@
 # Screenshots
 
-Drop real dashboard screenshots here from a live run (`docker compose up -d`,
-then `http://127.0.0.1:8002/dashboard`). The README references these files:
+Live captures from the QuickBite operations console
+(`http://127.0.0.1:8002/dashboard`).
 
-| File | What to capture |
+| File | Shows |
 |---|---|
-| `01-dashboard.png` | Full dashboard: health pills, order form, live orders, pipeline, event stream |
-| `02-order-timeline.png` | Order timeline modal open on a `DRIVER_ASSIGNED` order |
-| `03-chaos-lab.png` | Chaos Lab section after a poison + duplicate demo (DLQ counter visible) |
-| `04-dark-mode.png` | Dashboard with the dark theme toggled on |
+| `01-dashboard.png` | Full console: health pills, order form, live orders, pipeline, event stream |
+| `02-order-timeline.png` | Order timeline modal on a `DRIVER_ASSIGNED` order |
+| `03-chaos-lab.png` | Dead-letter queue counter after poison-message demos |
+| `04-dark-mode.png` | Full console with the dark theme toggled on |
 
-Tips:
-- Use a real order flow (place an order, let it reach `DRIVER_ASSIGNED`) so the
-  screenshots show live data, not empty states.
-- 1440px-wide browser window works well.
-- PNG format, keep each file under ~500 KB.
+To refresh them: run `docker compose up -d`, place a few orders, trigger the
+Chaos Lab actions, and capture at 1440px width.
