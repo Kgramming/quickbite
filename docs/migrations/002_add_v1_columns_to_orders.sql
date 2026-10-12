@@ -23,8 +23,7 @@ BEGIN
         WHERE table_name = 'orders' AND column_name = 'user_id'
     ) THEN
         ALTER TABLE orders ADD COLUMN user_id VARCHAR(36) NULL;
-        CREATE INDEX ix_orders_user_id ON orders(user_id);
-        RAISE NOTICE 'orders: added user_id column with index';
+        RAISE NOTICE 'orders: added user_id column';
     ELSE
         RAISE NOTICE 'orders: user_id column already present, skipping';
     END IF;
@@ -35,8 +34,7 @@ BEGIN
         WHERE table_name = 'orders' AND column_name = 'restaurant_id'
     ) THEN
         ALTER TABLE orders ADD COLUMN restaurant_id VARCHAR(36) NULL;
-        CREATE INDEX ix_orders_restaurant_id ON orders(restaurant_id);
-        RAISE NOTICE 'orders: added restaurant_id column with index';
+        RAISE NOTICE 'orders: added restaurant_id column';
     ELSE
         RAISE NOTICE 'orders: restaurant_id column already present, skipping';
     END IF;
@@ -87,5 +85,7 @@ BEGIN
 END
 $$;
 
--- Create composite index for order listing (user + status)
+-- Create individual indexes for query performance
+CREATE INDEX IF NOT EXISTS ix_orders_user_id ON orders(user_id);
+CREATE INDEX IF NOT EXISTS ix_orders_restaurant_id ON orders(restaurant_id);
 CREATE INDEX IF NOT EXISTS ix_orders_user_status ON orders(user_id, status);
