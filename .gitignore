@@ -42,3 +42,29 @@ logs/
 
 # Docker
 .dockerignore
+
+# Flutter
+flutter_app/.dart_tool/
+flutter_app/.flutter-plugins
+flutter_app/.flutter-plugins-dependencies
+flutter_app/.packages
+flutter_app/pubspec.lock
+flutter_app/build/
+flutter_app/.firebase/
+flutter_app/.firebaserc
+flutter_app/ios/.symlinks/
+flutter_app/ios/.generated.xcconfig
+flutter_app/ios/Flutter/flutter_export_environment.sh
+flutter_app/macos/.symlinks/
+flutter_app/macos/.generated.xcconfig
+flutter_app/android/.gradle/
+flutter_app/android/captures/
+flutter_app/android/local.properties
+flutter_app/android/gradlew
+flutter_app/android/gradlew.bat
+flutter_app/android/gradle-wrapper.jar
+flutter_app/android/gradle-wrapper.properties
+flutter_app/ios/Pods/
+flutter_app/ios/Podfile.lock
+flutter_app/*.iml
+flutter_app/.idea/
