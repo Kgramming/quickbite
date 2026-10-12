@@ -202,7 +202,7 @@ class TestLiveOutboxAndPayment:
             assert message is not None
             retry_exchange = await live_rabbitmq.get_retry_exchange(channel)
             result = await settle_message(
-                message, retry_exchange, process_payment_event, "payment")
+                message, retry_exchange, process_payment_event, "payment", "payment.queue")
             await channel.close()
             return result
 
@@ -246,7 +246,7 @@ class TestLiveDeadLetter:
             message = await queue.get(timeout=10)
             assert message is not None
             result = await settle_message(
-                message, retry_exchange, process_payment_event, "payment")
+                message, retry_exchange, process_payment_event, "payment", "payment.queue")
             assert result == "dlq"
 
             dead = await dlq.get(timeout=10)
@@ -291,7 +291,7 @@ class TestLiveDeadLetter:
             message = await queue.get(timeout=10)
             assert message is not None
             result = await settle_message(
-                message, retry_exchange, always_transient, "payment")
+                message, retry_exchange, always_transient, "payment", "payment.queue")
             assert result == "dlq"
 
             dlq = await channel.get_queue(DLQ_QUEUE)

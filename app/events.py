@@ -153,4 +153,43 @@ OUTBOX_ROUTING_KEYS = {
     "order.payment.failed": "order.payment.failed",
     "order.confirmed": "order.confirmed",
     "order.driver.assigned": "order.driver.assigned",
+    "order.failed": "order.failed",
 }
+
+
+# ---------- event envelope v2 ----------
+
+SCHEMA_VERSION = 1
+
+
+def build_envelope(
+    event_type: str,
+    order_id: str,
+    data: dict | None = None,
+    order_version: int = 1,
+    correlation_id: str | None = None,
+    causation_id: str | None = None,
+    event_id: str | None = None,
+) -> dict:
+    """Build a spec-compliant v2 event envelope.
+
+    Required fields: event_id (immutable), schema_version, event_type,
+    order_id, order_version, occurred_at, correlation_id, causation_id,
+    data payload. The envelope's ``event_id`` doubles as the outbox row
+    id and the AMQP message_id.
+    """
+    import uuid as _uuid
+    from datetime import datetime, timezone
+
+    eid = event_id or str(_uuid.uuid4())
+    return {
+        "event_id": eid,
+        "schema_version": SCHEMA_VERSION,
+        "event_type": event_type,
+        "order_id": order_id,
+        "order_version": order_version,
+        "occurred_at": datetime.now(timezone.utc).isoformat(),
+        "correlation_id": correlation_id or eid,
+        "causation_id": causation_id,
+        "data": data or {},
+    }

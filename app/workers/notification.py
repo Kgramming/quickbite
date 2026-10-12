@@ -21,6 +21,7 @@ from app.database import SessionLocal
 from app.idempotency import claim_event
 from app.models import Order
 from app.retry import NonRetryableError
+from app.v1.failure_config import get_failure_mode
 from app.v1.models import Notification
 from app.worker_common import run_worker
 
@@ -68,6 +69,13 @@ async def process_notification_event(body: bytes, session: Optional[Session] = N
     event_type = data.get("event_type")
     if not order_id or not event_id:
         raise NonRetryableError("missing order_id or event_id in notification event")
+
+    # Deterministic failure injection runs BEFORE the idempotency claim so
+    # injected transient failures exercise the retry loop. Quarantined
+    # notification failures never change the order's business status.
+    if get_failure_mode("notification", order_id) == "always_fail":
+        logger.warning(f"Failure injection: notification always_fail for {order_id}")
+        return False
 
     own_session = session is None
     if own_session:

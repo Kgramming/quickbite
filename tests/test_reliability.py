@@ -34,7 +34,7 @@ from app.retry import (
     next_retry_delay_seconds,
     republish_for_retry,
 )
-from app.worker_common import mark_order_failed, settle_message
+from app.worker_common import handle_terminal_failure, settle_message
 
 
 # ---------------------------------------------------------------------------
@@ -159,21 +159,26 @@ class TestRetryPolicy:
         msg = FakeMessage(b"{}", headers={RETRY_COUNT_HEADER: "bogus"})
         assert get_retry_count(msg) == 0
 
-    def test_backoff_increases(self):
+    def test_backoff_matches_spec_delays(self):
+        # Spec: 1 initial + 3 delayed retries at 2s, 10s, 30s.
+        from app.retry import RETRY_DELAYS_SECONDS
+        assert RETRY_DELAYS_SECONDS == [2.0, 10.0, 30.0]
         delays = [next_retry_delay_seconds(i) for i in range(3)]
-        assert delays == sorted(delays)
-        assert len(set(delays)) == 3  # strictly increasing
+        assert delays == [2.0, 10.0, 30.0]
 
-    async def test_republish_for_retry_sets_headers_and_ttl(self):
+    async def test_republish_for_retry_targets_originating_queue(self):
+        # Targeted retry routing: the retry copy is addressed to the
+        # failing consumer's queue only (via default exchange), never
+        # re-fanned-out through the domain exchange.
         exchange = FakeExchange(RETRY_EXCHANGE)
         msg = FakeMessage(b'{"a": 1}', headers={"order_id": "o1"},
                           routing_key="order.created")
-        new_count = await republish_for_retry(exchange, msg, "order.created")
+        new_count = await republish_for_retry(exchange, msg, "payment.queue")
 
         assert new_count == 1
         assert len(exchange.published) == 1
         published, routing_key, _ = exchange.published[0]
-        assert routing_key == "order.created"  # original key preserved
+        assert routing_key == "payment.queue"  # targeted, not topic key
         assert published.headers[RETRY_COUNT_HEADER] == 1
         assert published.headers["order_id"] == "o1"
         assert published.delivery_mode == aio_pika.DeliveryMode.PERSISTENT
@@ -184,7 +189,7 @@ class TestRetryPolicy:
         exchange = FakeExchange(RETRY_EXCHANGE)
         msg = FakeMessage(b"{}", headers={RETRY_COUNT_HEADER: 1},
                           routing_key="order.paid")
-        new_count = await republish_for_retry(exchange, msg, "order.paid")
+        new_count = await republish_for_retry(exchange, msg, "restaurant.queue")
         assert new_count == 2
         published, _, _ = exchange.published[0]
         assert published.headers[RETRY_COUNT_HEADER] == 2
@@ -210,16 +215,21 @@ class TestTopologyDeclaration:
             queue = manager.channel.declared_queues[queue_name]
             assert queue.kwargs["durable"] is True
             assert queue.kwargs["arguments"] == {
-                "x-dead-letter-exchange": DLX_EXCHANGE
-            }, f"{queue_name} missing DLX argument"
+                "x-dead-letter-exchange": DLX_EXCHANGE,
+                "x-dead-letter-routing-key": "failed",
+            }, f"{queue_name} missing DLX arguments"
+        assert DLX_EXCHANGE == "quickbite.dead"
 
-    async def test_retry_queue_dead_letters_back_to_main_exchange(self):
+    async def test_retry_queue_dead_letters_to_default_exchange_targeted(self):
+        # Targeted retry routing: expired retries go to the default
+        # exchange (routing key = originating queue name), never back
+        # through the domain exchange.
         manager = await self._manager_with_fake_channel()
         await manager.declare_application_topology(QUEUE_CONFIG)
 
         queue = manager.channel.declared_queues[RETRY_QUEUE]
         assert queue.kwargs["arguments"] == {
-            "x-dead-letter-exchange": MAIN_EXCHANGE
+            "x-dead-letter-exchange": ""
         }
 
     async def test_dead_letter_queue_bound_to_dlx(self):
@@ -228,7 +238,7 @@ class TestTopologyDeclaration:
 
         assert DLQ_QUEUE in manager.channel.declared_queues
         dlq = manager.channel.declared_queues[DLQ_QUEUE]
-        assert (DLX_EXCHANGE, "#") in dlq.bindings
+        assert (DLX_EXCHANGE, "failed") in dlq.bindings
 
     async def test_exchanges_declared_durable(self):
         manager = await self._manager_with_fake_channel()
@@ -290,7 +300,7 @@ class TestSettleMessage:
         async def process_ok(body: bytes) -> bool:
             return True
 
-        result = await settle_message(message, exchange, process_ok, "payment")
+        result = await settle_message(message, exchange, process_ok, "payment", "payment.queue")
 
         assert result == "acked"
         assert message.acked == 1
@@ -305,10 +315,11 @@ class TestSettleMessage:
         async def process_fail(body: bytes) -> bool:
             return False
 
-        result = await settle_message(message, exchange, process_fail, "payment")
+        result = await settle_message(message, exchange, process_fail, "payment", "payment.queue")
 
         assert result == "retried"
         assert len(exchange.published) == 1  # retry copy confirmed first
+        assert exchange.published[0][1] == "payment.queue"  # targeted routing
         assert message.acked == 1  # original acked only afterwards
         assert message.rejected == []
 
@@ -319,7 +330,7 @@ class TestSettleMessage:
         async def process_boom(body: bytes) -> bool:
             raise RuntimeError("db exploded")
 
-        result = await settle_message(message, exchange, process_boom, "payment")
+        result = await settle_message(message, exchange, process_boom, "payment", "payment.queue")
 
         assert result == "retried"
         assert len(exchange.published) == 1
@@ -332,7 +343,7 @@ class TestSettleMessage:
         async def process_poison(body: bytes) -> bool:
             raise NonRetryableError("unparseable")
 
-        result = await settle_message(message, exchange, process_poison, "payment")
+        result = await settle_message(message, exchange, process_poison, "payment", "payment.queue")
 
         assert result == "dlq"
         assert message.rejected == [False]  # reject(requeue=False) -> DLX -> DLQ
@@ -370,16 +381,16 @@ class TestSettleMessage:
         async def process_fail(body: bytes) -> bool:
             return False
 
-        result = await settle_message(message, exchange, process_fail, "payment")
+        result = await settle_message(message, exchange, process_fail, "payment", "payment.queue")
 
         assert result == "dlq"
         assert message.rejected == [False]
         assert exchange.published == []  # no further retry
-        # mark_order_failed closed the session; re-query for a fresh state.
+        # handle_terminal_failure closed the session; re-query for a fresh state.
         order = session.query(Order).filter(Order.id == "order-dlq-1").first()
-        assert order.status == OrderStatus.FAILED
+        assert order.status == OrderStatus.PAYMENT_FAILED  # spec: payment -> PAYMENT_FAILED
 
-    def test_mark_order_failed_never_overwrites_terminal(self, monkeypatch):
+    def test_terminal_failure_never_overwrites_terminal(self, monkeypatch):
         import app.worker_common as worker_common_module
 
         session = _sqlite_session()
@@ -395,10 +406,9 @@ class TestSettleMessage:
         )
         session.add(order)
         session.commit()
-        monkeypatch.setattr(worker_common_module, "SessionLocal", lambda: session)
 
-        mark_order_failed("order-term-1")
-        # mark_order_failed closed the session; re-query for a fresh state.
+        handle_terminal_failure(session, "payment", "order-term-1", "evt-1")
+        session.commit()
         order = session.query(Order).filter(Order.id == "order-term-1").first()
         assert order.status == OrderStatus.PAYMENT_FAILED
 
@@ -472,3 +482,229 @@ class TestConsumerLifetime:
             await task
         except asyncio.CancelledError:
             pass
+
+
+# ---------------------------------------------------------------------------
+# Milestone 2: quarantine records + worker-aware exhaustion
+# ---------------------------------------------------------------------------
+
+class TestQuarantineAndExhaustion:
+    def _order(self, session, order_id, status):
+        order = Order(
+            id=order_id,
+            customer_name="N",
+            customer_email="n@n.com",
+            customer_phone="5550000000",
+            delivery_address="addr",
+            items="[]",
+            status=status,
+            total_amount="10.00",
+        )
+        session.add(order)
+        session.commit()
+        return order
+
+    async def test_payment_exhaustion_writes_quarantine_and_payment_failed(self, monkeypatch):
+        import app.worker_common as wc
+        from app.v1.models import QuarantineRecord
+
+        session = _sqlite_session()
+        self._order(session, "q-pay-1", OrderStatus.PENDING)
+        monkeypatch.setattr(wc, "SessionLocal", lambda: session)
+
+        body = json.dumps({
+            "event_id": "evt-q1", "event_type": "order.created",
+            "order_id": "q-pay-1"}).encode()
+        message = FakeMessage(body, headers={RETRY_COUNT_HEADER: MAX_RETRIES})
+        exchange = FakeExchange(RETRY_EXCHANGE)
+
+        async def always_fail(body: bytes) -> bool:
+            return False
+
+        result = await settle_message(message, exchange, always_fail,
+                                      "payment", "payment.queue")
+        assert result == "dlq"
+
+        rec = session.query(QuarantineRecord).filter(
+            QuarantineRecord.event_id == "evt-q1").first()
+        assert rec is not None
+        assert rec.failure_code == "RETRY_EXHAUSTED"
+        assert rec.attempts == MAX_RETRIES
+        assert rec.source == "payment:payment.queue"
+
+        order = session.query(Order).filter(Order.id == "q-pay-1").first()
+        assert order.status == OrderStatus.PAYMENT_FAILED  # spec, not FAILED
+
+    async def test_notification_exhaustion_preserves_business_status(self, monkeypatch):
+        import app.worker_common as wc
+        from app.v1.models import QuarantineRecord
+
+        session = _sqlite_session()
+        self._order(session, "q-notif-1", OrderStatus.DRIVER_ASSIGNED)
+        monkeypatch.setattr(wc, "SessionLocal", lambda: session)
+
+        body = json.dumps({
+            "event_id": "evt-q2", "event_type": "order.driver.assigned",
+            "order_id": "q-notif-1"}).encode()
+        message = FakeMessage(body, headers={RETRY_COUNT_HEADER: MAX_RETRIES})
+        exchange = FakeExchange(RETRY_EXCHANGE)
+
+        async def always_fail(body: bytes) -> bool:
+            return False
+
+        result = await settle_message(message, exchange, always_fail,
+                                      "notification", "notification.queue")
+        assert result == "dlq"
+
+        # Quarantine record exists...
+        rec = session.query(QuarantineRecord).filter(
+            QuarantineRecord.event_id == "evt-q2").first()
+        assert rec is not None
+        # ...but business status untouched.
+        order = session.query(Order).filter(Order.id == "q-notif-1").first()
+        assert order.status == OrderStatus.DRIVER_ASSIGNED
+
+    async def test_poison_message_quarantined_without_retry(self, monkeypatch):
+        import app.worker_common as wc
+        from app.v1.models import QuarantineRecord
+
+        session = _sqlite_session()
+        self._order(session, "q-poison-1", OrderStatus.PAID)
+        monkeypatch.setattr(wc, "SessionLocal", lambda: session)
+
+        body = json.dumps({
+            "event_id": "evt-q3", "event_type": "order.paid",
+            "order_id": "q-poison-1"}).encode()
+        message = FakeMessage(body)
+        exchange = FakeExchange(RETRY_EXCHANGE)
+
+        async def poison(body: bytes) -> bool:
+            raise NonRetryableError("bad payload")
+
+        result = await settle_message(message, exchange, poison,
+                                      "restaurant", "restaurant.queue")
+        assert result == "dlq"
+        assert exchange.published == []  # no retry burned
+
+        rec = session.query(QuarantineRecord).filter(
+            QuarantineRecord.event_id == "evt-q3").first()
+        assert rec is not None
+        assert rec.failure_code == "POISON_MESSAGE"
+
+
+# ---------------------------------------------------------------------------
+# Milestone 2: event envelope v2
+# ---------------------------------------------------------------------------
+
+class TestEnvelopeV2:
+    def test_envelope_has_required_fields(self):
+        from app.events import build_envelope
+        env = build_envelope(
+            event_type="order.paid", order_id="o1",
+            order_version=3, correlation_id="corr-1", causation_id="cause-1",
+            data={"amount_minor": 100},
+        )
+        assert env["schema_version"] == 1
+        assert env["event_type"] == "order.paid"
+        assert env["order_id"] == "o1"
+        assert env["order_version"] == 3
+        assert env["correlation_id"] == "corr-1"
+        assert env["causation_id"] == "cause-1"
+        assert env["data"] == {"amount_minor": 100}
+        assert env["event_id"]  # immutable id present
+        assert env["occurred_at"]  # timestamp present
+
+    def test_envelope_defaults_correlation_to_event_id(self):
+        from app.events import build_envelope
+        env = build_envelope(event_type="order.created", order_id="o2")
+        assert env["correlation_id"] == env["event_id"]
+        assert env["causation_id"] is None
+
+
+# ---------------------------------------------------------------------------
+# Milestone 2: deterministic failure injection config
+# ---------------------------------------------------------------------------
+
+class TestFailureInjectionConfig:
+    def test_defaults_to_success(self, monkeypatch):
+        from app.v1.failure_config import get_failure_mode
+        monkeypatch.delenv("QB_PAYMENT_FAILURE_MODE", raising=False)
+        assert get_failure_mode("payment") == "success"
+
+    def test_reads_env_mode(self, monkeypatch):
+        from app.v1.failure_config import get_failure_mode
+        monkeypatch.setenv("QB_PAYMENT_FAILURE_MODE", "fail_twice_then_succeed")
+        assert get_failure_mode("payment") == "fail_twice_then_succeed"
+
+    def test_invalid_mode_falls_back_to_success(self, monkeypatch):
+        from app.v1.failure_config import get_failure_mode
+        monkeypatch.setenv("QB_PAYMENT_FAILURE_MODE", "explode")
+        assert get_failure_mode("payment") == "success"
+
+    def test_unknown_worker_is_success(self):
+        from app.v1.failure_config import get_failure_mode
+        assert get_failure_mode("nope") == "success"
+
+
+# ---------------------------------------------------------------------------
+# Milestone 2: payment fail_twice_then_succeed injection
+# ---------------------------------------------------------------------------
+
+class TestPaymentInjection:
+    async def test_fail_twice_then_succeed(self, monkeypatch):
+        import app.workers.payment as pay
+        from app.v1.models import SimulatedPayment
+
+        monkeypatch.setenv("QB_PAYMENT_FAILURE_MODE", "fail_twice_then_succeed")
+        pay._injection_attempts.clear()
+
+        session = _sqlite_session()
+        order = Order(
+            id="inj-1",
+            customer_name="N", customer_email="n@n.com",
+            customer_phone="5550000000", delivery_address="addr",
+            items="[]", status=OrderStatus.PENDING, total_amount="10.00",
+        )
+        session.add(order)
+        session.commit()
+
+        body = json.dumps({
+            "event_id": "evt-inj-1", "event_type": "order.created",
+            "order_id": "inj-1"}).encode()
+
+        # Attempts 1-2: transient failure (drives the retry loop)
+        assert await pay.process_payment_event(body, session) is False
+        assert await pay.process_payment_event(body, session) is False
+        # Attempt 3: succeeds and charges exactly once
+        assert await pay.process_payment_event(body, session) is True
+
+        order = session.query(Order).filter(Order.id == "inj-1").first()
+        assert order.status == OrderStatus.PAID
+        assert session.query(SimulatedPayment).filter(
+            SimulatedPayment.order_id == "inj-1").count() == 1
+        pay._injection_attempts.clear()
+        monkeypatch.delenv("QB_PAYMENT_FAILURE_MODE", raising=False)
+
+    async def test_always_fail_returns_transient(self, monkeypatch):
+        import app.workers.payment as pay
+
+        monkeypatch.setenv("QB_PAYMENT_FAILURE_MODE", "always_fail")
+        session = _sqlite_session()
+        order = Order(
+            id="inj-2",
+            customer_name="N", customer_email="n@n.com",
+            customer_phone="5550000000", delivery_address="addr",
+            items="[]", status=OrderStatus.PENDING, total_amount="10.00",
+        )
+        session.add(order)
+        session.commit()
+
+        body = json.dumps({
+            "event_id": "evt-inj-2", "event_type": "order.created",
+            "order_id": "inj-2"}).encode()
+        assert await pay.process_payment_event(body, session) is False
+        # Order untouched: exhaustion handling (PAYMENT_FAILED) is the
+        # settle_message layer's job, not the worker's.
+        order = session.query(Order).filter(Order.id == "inj-2").first()
+        assert order.status == OrderStatus.PENDING
+        monkeypatch.delenv("QB_PAYMENT_FAILURE_MODE", raising=False)

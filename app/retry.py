@@ -3,15 +3,16 @@
 Strategy (no broker plugins required):
   - Each message carries an ``x-retry-count`` header (default 0).
   - On transient failure with count < MAX_RETRIES, the worker publishes
-    the message to the ``quickbite.retry`` fanout exchange with a
-    per-message TTL (5s / 10s / 20s backoff) and acks the original.
-    ``orders.retry.queue`` dead-letters expired messages back to
-    ``quickbite.orders`` with their original routing key, so they are
-    redelivered to the originating worker queue.
+    a delayed-retry copy **targeted at the originating queue only**
+    (via the default exchange with the queue name as routing key),
+    with a per-message TTL (2s / 10s / 30s backoff), then acks the original.
+    ``orders.retry.queue`` dead-letters expired messages to the default
+    exchange, so they are redelivered **only** to the failing consumer's
+    queue — never re-fanned-out to unrelated subscribers.
   - When retries are exhausted (or the failure is non-retryable), the
     worker rejects with requeue=False; the queue's
     ``x-dead-letter-exchange`` routes the message to
-    ``orders.dead-letter.queue`` and the order is marked FAILED.
+    ``orders.dead-letter.queue`` and the order is marked terminal.
 """
 
 import logging
@@ -22,7 +23,7 @@ import aio_pika
 logger = logging.getLogger(__name__)
 
 MAX_RETRIES = 3
-RETRY_DELAYS_SECONDS = [5.0, 10.0, 20.0]
+RETRY_DELAYS_SECONDS = [2.0, 10.0, 30.0]
 RETRY_COUNT_HEADER = "x-retry-count"
 
 
@@ -51,13 +52,19 @@ def next_retry_delay_seconds(retry_count: int) -> float:
 async def republish_for_retry(
     retry_exchange: aio_pika.Exchange,
     message: aio_pika.IncomingMessage,
-    routing_key: str,
+    target_queue: str,
 ) -> int:
-    """Publish a delayed-retry copy of the message.
+    """Publish a delayed-retry copy targeted at one queue.
 
-    The retry copy is published with publisher confirms: this coroutine
-    only returns after the broker confirms receipt. Callers must ack the
-    original message only after this returns.
+    The retry copy is published with ``target_queue`` (the originating
+    consumer's queue name) as the routing key. After its TTL expires,
+    ``orders.retry.queue`` dead-letters it to the **default exchange**,
+    so it lands only in ``target_queue`` — never re-fanned-out through
+    the domain exchange to unrelated subscribers.
+
+    Publisher confirms: this coroutine only returns after the broker
+    confirms receipt. Callers must ack the original message only after
+    this returns.
 
     Returns:
         The new retry count carried by the retry copy.
@@ -75,9 +82,9 @@ async def republish_for_retry(
         message_id=message.message_id,
         expiration=timedelta(seconds=delay),
     )
-    await retry_exchange.publish(retry_message, routing_key=routing_key)
+    await retry_exchange.publish(retry_message, routing_key=target_queue)
     logger.info(
         f"Scheduled retry {count + 1}/{MAX_RETRIES} in {delay:.0f}s "
-        f"(routing_key={routing_key})"
+        f"(target_queue={target_queue})"
     )
     return count + 1

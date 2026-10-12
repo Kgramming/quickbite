@@ -18,9 +18,11 @@ import aio_pika
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
+from app.events import build_envelope
 from app.idempotency import claim_event
 from app.models import Order, OrderStatus, OutboxEvent
 from app.retry import NonRetryableError
+from app.v1.failure_config import get_failure_mode
 from app.v1.models import DriverAssignment
 from app.v1.worker_helpers import record_transition
 from app.worker_common import run_worker
@@ -84,6 +86,30 @@ async def process_delivery_event(body: bytes, session: Optional[Session] = None)
             session.commit()
             return True
 
+        # Deterministic failure injection: terminal delivery failure.
+        # No retry: the business outcome is final (CONFIRMED -> FAILED).
+        if get_failure_mode("delivery", order_id) == "always_fail":
+            logger.warning(f"Failure injection: delivery always_fail for {order_id}")
+            record_transition(session, order, OrderStatus.FAILED)
+            order.failure_code = "NO_DRIVERS_AVAILABLE"
+            session.add(order)
+            envelope = build_envelope(
+                event_type="order.failed",
+                order_id=order.id,
+                order_version=order.version,
+                correlation_id=data.get("correlation_id"),
+                causation_id=event_id,
+                data={"reason": "no_drivers_available"},
+            )
+            session.add(OutboxEvent(
+                id=envelope["event_id"],
+                event_type="order.failed",
+                order_id=order.id,
+                payload=json.dumps(envelope),
+            ))
+            session.commit()
+            return True
+
         # Assign driver
         driver_id = await _assign_driver(order)
 
@@ -94,21 +120,25 @@ async def process_delivery_event(body: bytes, session: Optional[Session] = None)
             order_id=order.id, driver_name=f"Driver {driver_id[:8]}",
         ))
 
-        # Create order.driver.assigned outbox event
-        event_data = {
-            "event_id": str(uuid.uuid4()),
-            "event_type": "order.driver.assigned",
-            "order_id": order.id,
-            "driver_id": driver_id,
-            "driver_phone": "+1-555-0100",
-            "vehicle": "Tesla Model 3",
-        }
+        # Create order.driver.assigned outbox event (v2 envelope)
+        envelope = build_envelope(
+            event_type="order.driver.assigned",
+            order_id=order.id,
+            order_version=order.version,
+            correlation_id=data.get("correlation_id"),
+            causation_id=event_id,
+            data={
+                "driver_id": driver_id,
+                "driver_phone": "+1-555-0100",
+                "vehicle": "Tesla Model 3",
+            },
+        )
         session.add(
             OutboxEvent(
-                id=event_data["event_id"],
+                id=envelope["event_id"],
                 event_type="order.driver.assigned",
                 order_id=order.id,
-                payload=json.dumps(event_data),
+                payload=json.dumps(envelope),
             )
         )
 

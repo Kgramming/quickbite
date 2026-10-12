@@ -7,12 +7,14 @@ Topology (all durable):
       delivery.queue     <- order.confirmed
       notification.queue <- order.#
   - quickbite.retry (fanout)      : delayed retries
-      orders.retry.queue (TTL per message, DLX -> quickbite.orders)
-  - dlx.quickbite.orders (topic)  : dead-letter exchange
-      orders.dead-letter.queue <- #
+      orders.retry.queue (TTL per message, DLX -> default exchange,
+                          targeted at originating queue only)
+  - quickbite.dead (direct)       : dead-letter exchange
+      orders.dead-letter.queue <- failed
 
-Every worker queue declares x-dead-letter-exchange so rejected messages
-can never be silently dropped: they land in orders.dead-letter.queue.
+Every worker queue declares x-dead-letter-exchange=quickbite.dead with
+x-dead-letter-routing-key=failed so rejected messages can never be
+silently dropped: they land in orders.dead-letter.queue.
 """
 
 import logging
@@ -25,7 +27,8 @@ logger = logging.getLogger(__name__)
 
 MAIN_EXCHANGE = "quickbite.orders"
 RETRY_EXCHANGE = "quickbite.retry"
-DLX_EXCHANGE = "dlx.quickbite.orders"
+DLX_EXCHANGE = "quickbite.dead"
+DLX_ROUTING_KEY = "failed"
 RETRY_QUEUE = "orders.retry.queue"
 DLQ_QUEUE = "orders.dead-letter.queue"
 
@@ -99,9 +102,9 @@ class RabbitMQManager:
         """
         Declare a durable queue with bindings to the topic exchange.
 
-        The queue declares ``x-dead-letter-exchange`` so that rejected
-        (non-requeued) messages are routed to the dead-letter exchange
-        instead of being dropped.
+        The queue declares ``x-dead-letter-exchange=quickbite.dead`` with
+        ``x-dead-letter-routing-key=failed`` so that rejected (non-requeued)
+        messages are routed to the dead-letter queue instead of being dropped.
 
         Args:
             queue_name: Name of the queue
@@ -118,7 +121,10 @@ class RabbitMQManager:
         queue = await ch.declare_queue(
             name=queue_name,
             durable=True,
-            arguments={"x-dead-letter-exchange": DLX_EXCHANGE},
+            arguments={
+                "x-dead-letter-exchange": DLX_EXCHANGE,
+                "x-dead-letter-routing-key": DLX_ROUTING_KEY,
+            },
         )
 
         for routing_key in routing_keys:
@@ -130,12 +136,13 @@ class RabbitMQManager:
     async def declare_retry_topology(
         self, channel: Optional[aio_pika.Channel] = None
     ) -> Queue:
-        """Declare the delayed-retry loop.
+        """Declare the delayed-retry loop with targeted routing.
 
         ``orders.retry.queue`` holds messages with a per-message TTL.
-        On expiry the broker dead-letters them back to ``quickbite.orders``
-        with their *original* routing key, so they are redelivered to the
-        worker queue they came from. No plugins required.
+        On expiry the broker dead-letters them to the **default exchange**
+        with the originating queue name as routing key, so each retry is
+        redelivered **only** to the failing consumer's queue — never
+        re-fanned-out through the domain exchange. No plugins required.
         """
         ch = channel or self.channel
         if not ch:
@@ -144,7 +151,7 @@ class RabbitMQManager:
         queue = await ch.declare_queue(
             name=RETRY_QUEUE,
             durable=True,
-            arguments={"x-dead-letter-exchange": MAIN_EXCHANGE},
+            arguments={"x-dead-letter-exchange": ""},
         )
         retry_exchange = await ch.declare_exchange(
             name=RETRY_EXCHANGE,
@@ -160,8 +167,10 @@ class RabbitMQManager:
     ) -> Queue:
         """Declare the dead-letter exchange and queue.
 
-        Rejected (non-requeued) messages from any worker queue arrive
-        here with their original routing key preserved.
+        ``quickbite.dead`` is a durable direct exchange;
+        ``orders.dead-letter.queue`` is bound with routing key ``failed``.
+        Rejected (non-requeued) messages from any worker queue arrive here.
+        Quarantined envelopes are inspectable via the management UI.
         """
         ch = channel or self.channel
         if not ch:
@@ -169,14 +178,14 @@ class RabbitMQManager:
 
         dlx = await ch.declare_exchange(
             name=DLX_EXCHANGE,
-            type=aio_pika.ExchangeType.TOPIC,
+            type=aio_pika.ExchangeType.DIRECT,
             durable=True,
         )
         dlq = await ch.declare_queue(
             name=DLQ_QUEUE,
             durable=True,
         )
-        await dlq.bind(dlx, routing_key="#")
+        await dlq.bind(dlx, routing_key=DLX_ROUTING_KEY)
         logger.info("Dead-letter topology declared")
         return dlq
 

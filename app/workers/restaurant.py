@@ -18,9 +18,11 @@ import aio_pika
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
+from app.events import build_envelope
 from app.idempotency import claim_event
 from app.models import Order, OrderStatus, OutboxEvent
 from app.retry import NonRetryableError
+from app.v1.failure_config import get_failure_mode
 from app.v1.worker_helpers import record_transition
 from app.worker_common import run_worker
 
@@ -83,6 +85,30 @@ async def process_restaurant_event(body: bytes, session: Optional[Session] = Non
             session.commit()
             return True
 
+        # Deterministic failure injection: terminal restaurant failure.
+        # No retry: the business outcome is final (PAID -> FAILED + order.failed).
+        if get_failure_mode("restaurant", order_id) == "always_fail":
+            logger.warning(f"Failure injection: restaurant always_fail for {order_id}")
+            record_transition(session, order, OrderStatus.FAILED)
+            order.failure_code = "RESTAURANT_REJECTED"
+            session.add(order)
+            envelope = build_envelope(
+                event_type="order.failed",
+                order_id=order.id,
+                order_version=order.version,
+                correlation_id=data.get("correlation_id"),
+                causation_id=event_id,
+                data={"reason": "restaurant_rejected"},
+            )
+            session.add(OutboxEvent(
+                id=envelope["event_id"],
+                event_type="order.failed",
+                order_id=order.id,
+                payload=json.dumps(envelope),
+            ))
+            session.commit()
+            return True
+
         # Confirm with restaurant
         await _confirm_with_restaurant(order)
 
@@ -90,20 +116,24 @@ async def process_restaurant_event(body: bytes, session: Optional[Session] = Non
         record_transition(session, order, OrderStatus.CONFIRMED)
         session.add(order)
 
-        # Create order.confirmed outbox event
-        event_data = {
-            "event_id": str(uuid.uuid4()),
-            "event_type": "order.confirmed",
-            "order_id": order.id,
-            "restaurant_id": "REST-001",
-            "estimated_time": 30,  # minutes
-        }
+        # Create order.confirmed outbox event (v2 envelope)
+        envelope = build_envelope(
+            event_type="order.confirmed",
+            order_id=order.id,
+            order_version=order.version,
+            correlation_id=data.get("correlation_id"),
+            causation_id=event_id,
+            data={
+                "restaurant_id": "REST-001",
+                "estimated_time": 30,  # minutes
+            },
+        )
         session.add(
             OutboxEvent(
-                id=event_data["event_id"],
+                id=envelope["event_id"],
                 event_type="order.confirmed",
                 order_id=order.id,
-                payload=json.dumps(event_data),
+                payload=json.dumps(envelope),
             )
         )
 

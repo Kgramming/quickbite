@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_session
+from app.events import build_envelope
 from app.models import Order, OrderStatus, OutboxEvent
 from app.v1.auth import (
     create_access_token,
@@ -264,20 +265,23 @@ def checkout(
     session.add(OrderStatusHistory(order_id=order_id, from_status=None,
                                    to_status="PENDING", version=1))
 
-    event_id = str(uuid.uuid4())
-    session.add(OutboxEvent(
-        id=event_id,
+    envelope = build_envelope(
         event_type="order.created",
         order_id=order_id,
-        payload=json.dumps({
-            "event_id": event_id,
-            "event_type": "order.created",
-            "order_id": order_id,
+        order_version=1,
+        correlation_id=idempotency_key,  # checkout request identity
+        data={
             "restaurant_id": body.restaurant_id,
             "total_amount_minor": total_minor,
             "currency": "INR",
             "status": "PENDING",
-        }),
+        },
+    )
+    session.add(OutboxEvent(
+        id=envelope["event_id"],
+        event_type="order.created",
+        order_id=order_id,
+        payload=json.dumps(envelope),
     ))
 
     accepted = CheckoutAccepted(

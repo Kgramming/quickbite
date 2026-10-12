@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_session
+from app.events import build_envelope
 from app.models import Order, OrderStatus, OutboxEvent
 from app.schemas import CreateOrderRequest, HealthResponse, OrderResponse
 
@@ -112,16 +113,12 @@ def create_order(
     session.add(order)
     session.flush()  # Flush to get the ID without committing
 
-    # Create outbox event for order.created with event_id
-    event_id = str(uuid.uuid4())
-    outbox_event = OutboxEvent(
-        id=event_id,
+    # Create outbox event for order.created with v2 envelope
+    envelope = build_envelope(
         event_type="order.created",
         order_id=order.id,
-        payload=json.dumps({
-            "event_id": event_id,
-            "event_type": "order.created",
-            "order_id": order.id,
+        order_version=1,
+        data={
             "customer_name": order.customer_name,
             "customer_email": order.customer_email,
             "customer_phone": order.customer_phone,
@@ -129,7 +126,13 @@ def create_order(
             "items": json.loads(order.items),
             "total_amount": order.total_amount,
             "status": order.status.value,
-        }),
+        },
+    )
+    outbox_event = OutboxEvent(
+        id=envelope["event_id"],
+        event_type="order.created",
+        order_id=order.id,
+        payload=json.dumps(envelope),
     )
 
     session.add(outbox_event)
