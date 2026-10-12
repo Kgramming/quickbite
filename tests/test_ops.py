@@ -117,4 +117,4 @@ class TestDashboardPage:
         r = client.get("/dashboard")
         assert r.status_code == 200
         assert "QuickBite" in r.text
-        assert "demo console" in r.text
+        assert "operations console" in r.text.lower()

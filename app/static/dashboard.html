@@ -3,266 +3,356 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>QuickBite — Live Demo Console</title>
+<title>QuickBite — Live Operations Console</title>
 <style>
   :root {
-    --bg: #0a0a0b;
-    --card: #131316;
-    --card2: #17171b;
-    --border: #26262b;
-    --text: #e8e8ea;
-    --muted: #8b8b93;
-    --amber: #FFC20E;
-    --green: #34d399;
-    --red: #f87171;
-    --blue: #4da3ff;
-    --mono: "SF Mono", "Cascadia Code", Consolas, monospace;
+    --bg: #FAF6F0;
+    --surface: #FFFFFF;
+    --surface-warm: #FFFDF9;
+    --border: #EADFD2;
+    --border-strong: #DCCFBF;
+    --text: #23201C;
+    --muted: #8A8177;
+    --faint: #B4AA9C;
+    --tomato: #E5484D;
+    --tomato-dark: #C93A40;
+    --tomato-soft: #FDECEC;
+    --orange: #F59E0B;
+    --orange-soft: #FEF3E2;
+    --green: #16A34A;
+    --green-soft: #E7F6EC;
+    --red: #DC2626;
+    --red-soft: #FDECEC;
+    --blue: #2563EB;
+    --blue-soft: #EAF1FE;
+    --amber: #D97706;
+    --radius: 14px;
+    --shadow: 0 1px 2px rgba(60, 42, 28, 0.05), 0 4px 14px rgba(60, 42, 28, 0.06);
+    --shadow-lg: 0 8px 32px rgba(60, 42, 28, 0.14);
+    --mono: "SF Mono", "Cascadia Code", Consolas, "Roboto Mono", monospace;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     background: var(--bg); color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
-    font-size: 14px; line-height: 1.45; padding: 16px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px; line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
   }
-  header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 12px 18px; background: var(--card); border: 1px solid var(--border);
-    border-radius: 12px; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;
+
+  /* ---------- header ---------- */
+  .topbar {
+    position: sticky; top: 0; z-index: 40;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
   }
-  header h1 { font-size: 18px; font-weight: 700; letter-spacing: .3px; }
-  header h1 .bolt { color: var(--amber); }
-  header h1 small { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 8px; }
+  .topbar-inner {
+    max-width: 1440px; margin: 0 auto; padding: 12px 24px;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; margin-right: auto; }
+  .brand-mark {
+    width: 38px; height: 38px; border-radius: 12px;
+    background: linear-gradient(135deg, var(--tomato), #F2762E);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 20px; font-weight: 800;
+    box-shadow: 0 4px 12px rgba(229, 72, 77, 0.35);
+  }
+  .brand h1 { font-size: 19px; font-weight: 800; letter-spacing: -0.2px; }
+  .brand h1 span { color: var(--tomato); }
+  .brand small { display: block; font-size: 11px; color: var(--muted); font-weight: 500; letter-spacing: 0.4px; }
   .health { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .badge {
-    display: inline-flex; align-items: center; gap: 6px;
-    background: var(--card2); border: 1px solid var(--border);
-    border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 600;
+  .pill-badge {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 999px; padding: 6px 13px; font-size: 12px; font-weight: 600;
+    box-shadow: var(--shadow);
   }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-  .dot.ok { background: var(--green); box-shadow: 0 0 8px var(--green); }
-  .dot.bad { background: var(--red); box-shadow: 0 0 8px var(--red); }
-  .grid {
-    display: grid; grid-template-columns: 300px 1fr 320px; gap: 14px;
-    margin-bottom: 14px;
-  }
-  @media (max-width: 1100px) { .grid { grid-template-columns: 1fr 1fr; } }
-  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); transition: background 0.3s; }
+  .dot.ok { background: var(--green); box-shadow: 0 0 8px rgba(22, 163, 74, 0.6); }
+  .dot.bad { background: var(--red); box-shadow: 0 0 8px rgba(220, 38, 38, 0.6); }
+  #clock { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+
+  /* ---------- layout ---------- */
+  .wrap { max-width: 1440px; margin: 0 auto; padding: 20px 24px 40px; }
+  .grid { display: grid; grid-template-columns: 320px 1fr 340px; gap: 18px; align-items: start; }
+  @media (max-width: 1150px) { .grid { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 780px) { .grid { grid-template-columns: 1fr; } }
+
   .card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 12px; padding: 16px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow);
   }
+  .card + .card { margin-top: 18px; }
   .card h2 {
     font-size: 12px; text-transform: uppercase; letter-spacing: 1.2px;
-    color: var(--muted); margin-bottom: 12px; font-weight: 700;
+    color: var(--muted); margin-bottom: 14px; font-weight: 700;
+    display: flex; align-items: center; gap: 8px;
   }
-  .card h2 .amber { color: var(--amber); }
-  label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
-  input, select {
-    width: 100%; background: var(--card2); border: 1px solid var(--border);
-    color: var(--text); border-radius: 8px; padding: 9px 10px; font-size: 13px;
-  }
-  input:focus { outline: none; border-color: var(--amber); }
-  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  button {
-    cursor: pointer; border: none; border-radius: 8px; font-weight: 700;
-    font-size: 13px; padding: 10px 14px; transition: transform .06s, opacity .15s;
-  }
-  button:active { transform: scale(.98); }
-  .btn-primary { background: var(--amber); color: #111; width: 100%; margin-top: 12px; }
-  .btn-primary:hover { opacity: .92; }
-  .btn-chaos {
-    background: var(--card2); color: var(--text); border: 1px solid var(--border);
-    width: 100%; margin-top: 8px; text-align: left; font-weight: 600;
-  }
-  .btn-chaos:hover { border-color: var(--red); }
-  .btn-chaos .tag {
-    display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 5px;
-    background: #3a2b2b; color: var(--red); margin-right: 8px; font-weight: 700;
-  }
-  .btn-chaos small { display: block; color: var(--muted); font-weight: 400; margin-top: 3px; font-size: 11px; }
-  .hint { font-size: 11px; color: var(--muted); margin-top: 10px; }
-  .hint code { color: var(--amber); font-family: var(--mono); }
+  .card h2 .tick { width: 8px; height: 8px; border-radius: 3px; background: var(--tomato); }
+  .card h2 .count { margin-left: auto; font-size: 11px; color: var(--faint); letter-spacing: 0.3px; }
 
-  /* order cards */
-  #orders { display: flex; flex-direction: column; gap: 8px; max-height: 560px; overflow-y: auto; }
-  .order {
-    background: var(--card2); border: 1px solid var(--border); border-radius: 10px;
-    padding: 10px 12px; cursor: pointer; transition: border-color .15s;
+  /* ---------- form ---------- */
+  label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 5px; font-weight: 600; }
+  label:first-of-type { margin-top: 0; }
+  input, select {
+    width: 100%; background: var(--surface-warm); border: 1px solid var(--border);
+    color: var(--text); border-radius: 10px; padding: 10px 12px; font-size: 13px;
+    transition: border-color 0.15s, box-shadow 0.15s;
   }
-  .order:hover { border-color: var(--amber); }
-  .order.sel { border-color: var(--amber); }
-  .order .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-  .order .id { font-family: var(--mono); font-size: 11px; color: var(--muted); }
-  .order .meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
-  .pill {
-    font-size: 10px; font-weight: 800; letter-spacing: .6px; padding: 3px 9px;
+  input:focus, select:focus { outline: none; border-color: var(--tomato); box-shadow: 0 0 0 3px rgba(229, 72, 77, 0.12); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .btn-primary {
+    width: 100%; margin-top: 14px; padding: 12px;
+    background: linear-gradient(135deg, var(--tomato), var(--tomato-dark));
+    color: #fff; border: none; border-radius: 10px;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    box-shadow: 0 4px 14px rgba(229, 72, 77, 0.3);
+    transition: transform 0.06s, box-shadow 0.15s, opacity 0.15s;
+  }
+  .btn-primary:hover { opacity: 0.94; box-shadow: 0 6px 18px rgba(229, 72, 77, 0.38); }
+  .btn-primary:active { transform: scale(0.98); }
+  .hint { font-size: 11.5px; color: var(--muted); margin-top: 10px; line-height: 1.5; }
+  .hint code { color: var(--tomato-dark); font-family: var(--mono); background: var(--tomato-soft); padding: 1px 5px; border-radius: 4px; }
+
+  /* ---------- chaos lab ---------- */
+  .chaos-card { border-color: #F0D9C8; background: linear-gradient(180deg, #FFFBF6, #FFFFFF); }
+  .chaos-card h2 .tick { background: var(--orange); }
+  .btn-chaos {
+    display: block; width: 100%; margin-top: 10px; padding: 11px 13px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    text-align: left; cursor: pointer; color: var(--text);
+    transition: border-color 0.15s, box-shadow 0.15s, transform 0.06s;
+  }
+  .btn-chaos:hover { border-color: var(--orange); box-shadow: 0 2px 10px rgba(245, 158, 11, 0.15); }
+  .btn-chaos:active { transform: scale(0.99); }
+  .btn-chaos:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+  .btn-chaos .tag {
+    display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: 0.6px;
+    padding: 3px 8px; border-radius: 6px; margin-right: 9px; vertical-align: 1px;
+    background: var(--orange-soft); color: #B45309;
+  }
+  .btn-chaos strong { font-size: 13px; font-weight: 700; }
+  .btn-chaos small { display: block; color: var(--muted); font-weight: 400; margin-top: 4px; font-size: 11.5px; line-height: 1.45; }
+  .btn-chaos small code { font-family: var(--mono); color: var(--tomato-dark); }
+
+  /* ---------- order list ---------- */
+  #orders { display: flex; flex-direction: column; gap: 10px; max-height: 620px; overflow-y: auto; padding: 2px; }
+  .order {
+    background: var(--surface-warm); border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px 14px; cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s, transform 0.06s;
+  }
+  .order:hover { border-color: var(--border-strong); box-shadow: var(--shadow); }
+  .order:focus-visible { outline: 2px solid var(--tomato); outline-offset: 2px; }
+  .order.sel { border-color: var(--tomato); box-shadow: 0 0 0 3px rgba(229, 72, 77, 0.14), var(--shadow); }
+  .order .top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .order .id { font-family: var(--mono); font-size: 12px; color: var(--muted); font-weight: 600; }
+  .order .meta { font-size: 12px; color: var(--muted); margin-top: 5px; }
+  .order .meta b { color: var(--text); font-weight: 600; }
+  .badge-status {
+    font-size: 10px; font-weight: 800; letter-spacing: 0.7px; padding: 4px 10px;
     border-radius: 999px; white-space: nowrap;
   }
-  .st-PENDING { background: #2a2a30; color: #b9b9c0; }
-  .st-PAID { background: #1d2f45; color: var(--blue); }
-  .st-CONFIRMED { background: #3a2f10; color: var(--amber); }
-  .st-DRIVER_ASSIGNED { background: #12352a; color: var(--green); }
-  .st-PAYMENT_FAILED, .st-FAILED { background: #3d1d1d; color: var(--red); }
-  .st-CANCELLED { background: #2a2a30; color: var(--muted); }
-  .empty { color: var(--muted); text-align: center; padding: 30px 10px; font-size: 13px; }
+  .st-PENDING { background: #F1EDE6; color: #78716C; }
+  .st-PAID { background: var(--blue-soft); color: var(--blue); }
+  .st-CONFIRMED { background: var(--orange-soft); color: var(--amber); }
+  .st-DRIVER_ASSIGNED { background: var(--green-soft); color: var(--green); }
+  .st-PAYMENT_FAILED, .st-FAILED { background: var(--red-soft); color: var(--red); }
+  .st-CANCELLED { background: #F1EDE6; color: var(--muted); }
+  .empty { color: var(--faint); text-align: center; padding: 36px 12px; font-size: 13px; }
 
-  /* pipeline */
+  /* ---------- pipeline ---------- */
   .pipe-row {
-    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
-    background: var(--card2); border: 1px solid var(--border);
-    border-radius: 10px; padding: 9px 10px; font-size: 12px;
+    display: flex; align-items: center; gap: 10px; margin-bottom: 9px;
+    background: var(--surface-warm); border: 1px solid var(--border);
+    border-radius: 11px; padding: 10px 12px; font-size: 12px;
   }
-  .pipe-row .qname { font-family: var(--mono); font-size: 11px; flex: 1; }
-  .pipe-row .arrow { color: var(--amber); font-weight: 700; }
-  .pipe-row .worker { color: var(--muted); }
+  .pipe-row:last-child { margin-bottom: 0; }
+  .pipe-row .qname { font-family: var(--mono); font-size: 11.5px; font-weight: 600; flex: 1; line-height: 1.5; }
+  .pipe-row .qname span { color: var(--faint); font-weight: 400; font-size: 10.5px; }
+  .pipe-row .arrow { color: var(--tomato); font-weight: 800; font-size: 14px; }
+  .pipe-row .worker { color: var(--muted); font-size: 11.5px; text-align: right; line-height: 1.5; }
+  .pipe-row .worker b { color: var(--text); font-weight: 600; }
   .depth {
-    font-family: var(--mono); font-size: 11px; font-weight: 700;
-    background: #1d2f45; color: var(--blue); border-radius: 6px; padding: 2px 8px;
+    font-family: var(--mono); font-size: 12px; font-weight: 700; min-width: 30px; text-align: center;
+    background: var(--blue-soft); color: var(--blue); border-radius: 7px; padding: 3px 8px;
   }
-  .depth.hot { background: #3d1d1d; color: var(--red); animation: pulse 1.2s infinite; }
-  @keyframes pulse { 50% { opacity: .55; } }
-  .cons { font-size: 10px; color: var(--muted); }
+  .depth.hot { background: var(--red-soft); color: var(--red); animation: pulse 1.2s infinite; }
+  @keyframes pulse { 50% { opacity: 0.55; } }
   .dlq-card {
-    margin-top: 10px; border: 1px dashed #4a2c2c; border-radius: 10px;
-    padding: 10px 12px; background: #171214;
+    margin-top: 14px; border: 1.5px dashed #E5B8B8; border-radius: 12px;
+    padding: 13px 15px; background: #FFF7F7;
   }
-  .dlq-card h3 { font-size: 11px; color: var(--red); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
-  .dlq-card .n { font-size: 22px; font-weight: 800; font-family: var(--mono); }
+  .dlq-card h3 { font-size: 11px; color: var(--red); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; font-weight: 800; }
+  .dlq-card .n { font-size: 26px; font-weight: 800; font-family: var(--mono); color: var(--text); }
+  .dlq-card p { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .route-list { font-family: var(--mono); font-size: 11.5px; color: var(--muted); line-height: 2; }
+  .route-list b { color: var(--text); font-weight: 600; }
 
-  /* event log */
+  /* ---------- event stream ---------- */
   #log {
-    background: #0d0d0f; border: 1px solid var(--border); border-radius: 12px;
-    padding: 14px 16px; height: 220px; overflow-y: auto;
-    font-family: var(--mono); font-size: 12px;
+    background: #211D19; border: 1px solid #38302A; border-radius: var(--radius);
+    padding: 14px 18px; height: 210px; overflow-y: auto;
+    font-family: var(--mono); font-size: 12px; color: #EDE6DA;
   }
-  #log .line { padding: 2px 0; border-bottom: 1px solid #16161a; }
-  #log .t { color: var(--muted); margin-right: 10px; }
-  #log .ev { color: var(--amber); font-weight: 700; }
-  #log .ev.order\\.paid { color: var(--blue); }
-  #log .unpub { color: var(--red); }
+  #log .line { padding: 3px 0; border-bottom: 1px solid #2E2823; }
+  #log .t { color: #8A7F72; margin-right: 12px; }
+  #log .ev { color: #FFB35C; font-weight: 700; }
+  #log .unpub { color: #F87171; }
 
-  /* modal */
+  /* ---------- modal ---------- */
   #modal-back {
-    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65);
+    display: none; position: fixed; inset: 0; background: rgba(35, 28, 22, 0.5);
+    backdrop-filter: blur(3px);
     align-items: center; justify-content: center; z-index: 50; padding: 20px;
   }
   #modal {
-    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
-    max-width: 560px; width: 100%; max-height: 80vh; overflow-y: auto; padding: 20px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+    max-width: 560px; width: 100%; max-height: 82vh; overflow-y: auto; padding: 24px;
+    box-shadow: var(--shadow-lg);
   }
-  #modal h3 { margin-bottom: 4px; }
-  #modal .sub { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 14px; }
-  .tl { position: relative; padding-left: 22px; }
-  .tl::before { content: ""; position: absolute; left: 7px; top: 6px; bottom: 6px; width: 2px; background: var(--border); }
-  .tl .ev-row { position: relative; padding: 7px 0; font-size: 13px; }
+  #modal h3 { font-size: 17px; font-weight: 800; letter-spacing: -0.2px; margin-bottom: 4px; }
+  #modal .sub { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-bottom: 18px; }
+  .tl { position: relative; padding-left: 26px; }
+  .tl::before { content: ""; position: absolute; left: 8px; top: 8px; bottom: 8px; width: 2px; background: var(--border); border-radius: 2px; }
+  .tl .ev-row { position: relative; padding: 9px 0; }
   .tl .ev-row::before {
-    content: ""; position: absolute; left: -19px; top: 12px; width: 10px; height: 10px;
-    border-radius: 50%; background: var(--amber);
+    content: ""; position: absolute; left: -22px; top: 14px; width: 11px; height: 11px;
+    border-radius: 50%; background: var(--tomato); border: 2px solid #fff;
+    box-shadow: 0 0 0 2px var(--tomato);
   }
-  .tl .ev-row.done::before { background: var(--green); }
-  .tl .ev-row .et { font-family: var(--mono); font-weight: 700; font-size: 12px; }
-  .tl .ev-row .ts { color: var(--muted); font-size: 11px; margin-left: 8px; }
-  .tl .ev-row .pub { font-size: 10px; margin-left: 8px; padding: 1px 6px; border-radius: 4px; background: var(--card2); color: var(--muted); }
-  .tl .ev-row .pub.y { color: var(--green); }
-  #modal-close { margin-top: 14px; width: 100%; background: var(--card2); color: var(--text); border: 1px solid var(--border); }
+  .tl .ev-row.done::before { background: var(--green); box-shadow: 0 0 0 2px var(--green); }
+  .tl .ev-row .et { font-family: var(--mono); font-weight: 700; font-size: 13px; }
+  .tl .ev-row .ts { color: var(--muted); font-size: 11.5px; margin-left: 10px; }
+  .tl .ev-row .pub { font-size: 10px; font-weight: 700; margin-left: 10px; padding: 2px 8px; border-radius: 999px; background: var(--orange-soft); color: var(--amber); }
+  .tl .ev-row .pub.y { background: var(--green-soft); color: var(--green); }
+  #modal-close {
+    margin-top: 18px; width: 100%; padding: 12px;
+    background: var(--surface-warm); color: var(--text);
+    border: 1px solid var(--border); border-radius: 10px;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  #modal-close:hover { border-color: var(--border-strong); background: #fff; }
+  #modal-close:focus-visible { outline: 2px solid var(--tomato); outline-offset: 2px; }
 
-  /* toast */
-  #toasts { position: fixed; bottom: 18px; right: 18px; z-index: 99; display: flex; flex-direction: column; gap: 8px; }
+  /* ---------- toasts ---------- */
+  #toasts { position: fixed; bottom: 20px; right: 20px; z-index: 99; display: flex; flex-direction: column; gap: 10px; }
   .toast {
-    background: var(--card2); border: 1px solid var(--amber); color: var(--text);
-    border-radius: 10px; padding: 10px 14px; font-size: 13px; max-width: 320px;
-    box-shadow: 0 8px 24px rgba(0,0,0,.5); animation: slidein .18s ease-out;
+    background: #26211C; color: #FBF7F0;
+    border-radius: 12px; padding: 13px 17px; font-size: 13px; max-width: 340px;
+    box-shadow: var(--shadow-lg); animation: slidein 0.2s ease-out;
+    border-left: 4px solid var(--tomato);
   }
-  .toast.err { border-color: var(--red); }
-  @keyframes slidein { from { transform: translateX(20px); opacity: 0; } }
+  .toast.err { border-left-color: var(--red); }
+  @keyframes slidein { from { transform: translateX(24px); opacity: 0; } }
+
+  button { font-family: inherit; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--tomato); outline-offset: 2px; }
 </style>
 </head>
 <body>
 
-<header>
-  <h1><span class="bolt">⚡</span> QuickBite <small>live demo console</small></h1>
-  <div class="health" id="health">
-    <span class="badge"><span class="dot" id="dot-api"></span>API</span>
-    <span class="badge"><span class="dot" id="dot-db"></span>Database</span>
-    <span class="badge"><span class="dot" id="dot-rmq"></span>RabbitMQ</span>
-    <span class="badge" id="clock" style="font-family:var(--mono)"></span>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="brand-mark">Q</div>
+      <div>
+        <h1>QuickBite <span>Ops</span></h1>
+        <small>LIVE OPERATIONS CONSOLE</small>
+      </div>
+    </div>
+    <div class="health" id="health" role="status" aria-label="System health">
+      <span class="pill-badge"><span class="dot" id="dot-api"></span>API</span>
+      <span class="pill-badge"><span class="dot" id="dot-db"></span>Database</span>
+      <span class="pill-badge"><span class="dot" id="dot-rmq"></span>RabbitMQ</span>
+      <span class="pill-badge" id="clock" aria-label="Current time"></span>
+    </div>
   </div>
 </header>
 
-<div class="grid">
-  <!-- LEFT: order form + chaos -->
-  <div class="card">
-    <h2><span class="amber">●</span> New order</h2>
-    <form id="order-form">
-      <label>Customer name</label>
-      <input id="f-name" value="Aarav Sharma" required maxlength="255">
-      <div class="row2">
-        <div><label>Phone</label><input id="f-phone" value="9876543210" required minlength="10" maxlength="20"></div>
-        <div><label>Total (₹)</label><input id="f-total" value="249.99" required pattern="^\d+\.\d{2}$"></div>
-      </div>
-      <label>Email</label>
-      <input id="f-email" type="email" value="aarav@example.com" required>
-      <label>Address</label>
-      <input id="f-addr" value="42, MG Road, Mumbai" required minlength="5">
-      <label>Item</label>
-      <div class="row2">
-        <div><input id="f-item" value="Paneer Tikka Pizza" required></div>
-        <div><input id="f-qty" type="number" value="1" min="1" max="20" title="Qty"></div>
-      </div>
-      <button class="btn-primary" type="submit">Place order →</button>
-    </form>
-    <p class="hint">Tip: total <code>999.99</code> triggers the mock payment decline.</p>
+<div class="wrap">
+  <div class="grid">
+    <!-- LEFT: order form + chaos lab -->
+    <div>
+      <section class="card" aria-labelledby="h-new-order">
+        <h2 id="h-new-order"><span class="tick"></span>New order</h2>
+        <form id="order-form">
+          <label for="f-name">Customer name</label>
+          <input id="f-name" value="Aarav Sharma" required maxlength="255" autocomplete="name">
+          <div class="row2">
+            <div><label for="f-phone">Phone</label><input id="f-phone" value="9876543210" required minlength="10" maxlength="20" autocomplete="tel"></div>
+            <div><label for="f-total">Total (₹)</label><input id="f-total" value="249.99" required pattern="^\d+\.\d{2}$" inputmode="decimal"></div>
+          </div>
+          <label for="f-email">Email</label>
+          <input id="f-email" type="email" value="aarav@example.com" required autocomplete="email">
+          <label for="f-addr">Delivery address</label>
+          <input id="f-addr" value="42, MG Road, Mumbai" required minlength="5" autocomplete="street-address">
+          <label for="f-item">Item</label>
+          <div class="row2">
+            <div><input id="f-item" value="Paneer Tikka Pizza" required aria-label="Item name"></div>
+            <div><input id="f-qty" type="number" value="1" min="1" max="20" title="Qty" aria-label="Quantity"></div>
+          </div>
+          <button class="btn-primary" type="submit">Place order →</button>
+        </form>
+        <p class="hint">Tip: total <code>999.99</code> triggers the mock payment decline.</p>
+      </section>
 
-    <h2 style="margin-top:18px"><span class="amber">●</span> Chaos lab</h2>
-    <button class="btn-chaos" id="chaos-fail"><span class="tag">FAIL</span>Payment-failure order<small>Places a ₹999.99 order → PAYMENT_FAILED, never advances.</small></button>
-    <button class="btn-chaos" id="chaos-poison"><span class="tag">POISON</span>Poison message<small>Publishes an unparseable message → watch the DLQ counter jump.</small></button>
-    <button class="btn-chaos" id="chaos-dup"><span class="tag">DUP</span>Duplicate delivery<small>Republishes the selected order's <span style="font-family:var(--mono)">order.created</span> → idempotency absorbs it.</small></button>
-  </div>
-
-  <!-- CENTER: live orders -->
-  <div class="card">
-    <h2><span class="amber">●</span> Live orders <span id="order-count" style="color:var(--muted)"></span></h2>
-    <div id="orders"><div class="empty">No orders yet — place one from the left panel.</div></div>
-  </div>
-
-  <!-- RIGHT: pipeline -->
-  <div>
-    <div class="card">
-      <h2><span class="amber">●</span> Message pipeline</h2>
-      <div id="pipeline"></div>
-      <div class="dlq-card">
-        <h3>☠ Dead-letter queue</h3>
-        <div><span class="n" id="dlq-n">0</span> <span style="color:var(--muted);font-size:12px">poison / exhausted messages</span></div>
-      </div>
+      <section class="card chaos-card" aria-labelledby="h-chaos">
+        <h2 id="h-chaos"><span class="tick"></span>Chaos lab</h2>
+        <button class="btn-chaos" id="chaos-fail"><span class="tag">FAIL</span><strong>Payment-failure order</strong><small>Places a ₹999.99 order → <code>PAYMENT_FAILED</code>, never advances.</small></button>
+        <button class="btn-chaos" id="chaos-poison"><span class="tag">POISON</span><strong>Poison message</strong><small>Publishes an unparseable message → watch the DLQ counter jump.</small></button>
+        <button class="btn-chaos" id="chaos-dup"><span class="tag">DUP</span><strong>Duplicate delivery</strong><small>Republishes the selected order's <code>order.created</code> → idempotency absorbs it. <b>Select an order card first.</b></small></button>
+      </section>
     </div>
-    <div class="card" style="margin-top:14px">
-      <h2><span class="amber">●</span> Routing keys</h2>
-      <div style="font-family:var(--mono);font-size:11.5px;color:var(--muted);line-height:1.9">
-        order.created → <span style="color:var(--text)">payment.queue</span><br>
-        order.paid → <span style="color:var(--text)">restaurant.queue</span><br>
-        order.confirmed → <span style="color:var(--text)">delivery.queue</span><br>
-        order.payment.failed → <span style="color:var(--text)">(terminal)</span><br>
-        order.# → <span style="color:var(--text)">notification.queue</span>
-      </div>
+
+    <!-- CENTER: live orders -->
+    <section class="card" aria-labelledby="h-orders">
+      <h2 id="h-orders"><span class="tick"></span>Live orders<span class="count" id="order-count"></span></h2>
+      <div id="orders" role="list"><div class="empty">No orders yet — place one from the left panel.</div></div>
+    </section>
+
+    <!-- RIGHT: pipeline -->
+    <div>
+      <section class="card" aria-labelledby="h-pipe">
+        <h2 id="h-pipe"><span class="tick"></span>Message pipeline</h2>
+        <div id="pipeline" aria-live="polite"></div>
+        <div class="dlq-card" role="status" aria-label="Dead letter queue">
+          <h3>☠ Dead-letter queue</h3>
+          <div><span class="n" id="dlq-n">0</span></div>
+          <p>poison / exhausted messages</p>
+        </div>
+      </section>
+      <section class="card" aria-labelledby="h-routes">
+        <h2 id="h-routes"><span class="tick"></span>Routing keys</h2>
+        <div class="route-list">
+          <code>order.created</code> → <b>payment.queue</b><br>
+          <code>order.paid</code> → <b>restaurant.queue</b><br>
+          <code>order.confirmed</code> → <b>delivery.queue</b><br>
+          <code>order.payment.failed</code> → <b>(terminal)</b><br>
+          <code>order.#</code> → <b>notification.queue</b>
+        </div>
+      </section>
     </div>
   </div>
-</div>
 
-<div class="card" style="margin-bottom:14px">
-  <h2><span class="amber">●</span> Event stream</h2>
-  <div id="log"><div class="line empty-line"><span class="t">--:--:--</span> waiting for events…</div></div>
+  <section class="card" style="margin-top:18px" aria-labelledby="h-stream">
+    <h2 id="h-stream"><span class="tick"></span>Event stream</h2>
+    <div id="log" aria-live="polite"><div class="line empty-line"><span class="t">--:--:--</span> waiting for events…</div></div>
+  </section>
 </div>
 
 <div id="modal-back">
-  <div id="modal">
-    <h3>Order timeline</h3>
+  <div id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <h3 id="modal-title">Order timeline</h3>
     <div class="sub" id="modal-sub"></div>
     <div class="tl" id="modal-tl"></div>
     <button id="modal-close">Close</button>
   </div>
 </div>
 
-<div id="toasts"></div>
+<div id="toasts" aria-live="polite"></div>
 
 <script>
 const $ = (s) => document.querySelector(s);
@@ -298,9 +388,14 @@ const STATUS_LABEL = {
   DRIVER_ASSIGNED: "DRIVER ASSIGNED", PAYMENT_FAILED: "PAYMENT FAILED",
   FAILED: "FAILED", CANCELLED: "CANCELLED",
 };
-const pill = (s) => `<span class="pill st-${s}">${STATUS_LABEL[s] || s}</span>`;
+const pill = (s) => `<span class="badge-status st-${s}">${STATUS_LABEL[s] || s}</span>`;
 const shortId = (id) => id.slice(0, 8);
 const tstr = (iso) => iso ? new Date(iso).toLocaleTimeString("en-GB") : "—";
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
 
 // ---------- health ----------
 async function pollHealth() {
@@ -335,17 +430,16 @@ async function pollOrders() {
     seenOrders.set(o.id, o.status);
   }
   box.innerHTML = orders.map((o) => `
-    <div class="order ${selectedOrder === o.id ? "sel" : ""}" data-id="${o.id}">
+    <div class="order ${selectedOrder === o.id ? "sel" : ""}" data-id="${o.id}" role="listitem" tabindex="0">
       <div class="top"><span class="id">#${shortId(o.id)}</span>${pill(o.status)}</div>
-      <div class="meta">${esc(o.customer_name)} · ₹${o.total_amount} · ${tstr(o.created_at)}</div>
+      <div class="meta"><b>${esc(o.customer_name)}</b> · ₹${o.total_amount} · ${tstr(o.created_at)}</div>
     </div>`).join("");
-  box.querySelectorAll(".order").forEach((el) =>
-    el.addEventListener("click", () => openTimeline(el.dataset.id)));
-}
-
-function esc(s) {
-  return String(s).replace(/[&<>"']/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  box.querySelectorAll(".order").forEach((el) => {
+    el.addEventListener("click", () => openTimeline(el.dataset.id));
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openTimeline(el.dataset.id); }
+    });
+  });
 }
 
 // ---------- pipeline ----------
@@ -365,10 +459,10 @@ async function pollQueues() {
     const d = byName[p.queue] || { messages: 0, consumers: 0 };
     const hot = d.messages > 0 ? "hot" : "";
     return `<div class="pipe-row">
-      <span class="qname">${p.queue}<br><span style="color:var(--muted);font-size:10px">${p.key}</span></span>
+      <span class="qname">${p.queue}<br><span>${p.key}</span></span>
       <span class="depth ${hot}" title="messages waiting">${d.messages}</span>
       <span class="arrow">→</span>
-      <span class="worker">${p.worker}<br><span class="cons">${d.consumers} consumer${d.consumers === 1 ? "" : "s"}</span></span>
+      <span class="worker"><b>${p.worker}</b><br>${d.consumers} consumer${d.consumers === 1 ? "" : "s"}</span>
     </div>`;
   }).join("");
   const dlq = byName["orders.dead-letter.queue"];
@@ -407,6 +501,8 @@ async function pollEvents() {
 }
 
 // ---------- timeline modal ----------
+// NOTE: closing the modal intentionally preserves the selected order
+// so the Chaos Lab DUP action keeps its target.
 async function openTimeline(orderId) {
   selectedOrder = orderId;
   document.querySelectorAll(".order").forEach((el) =>
@@ -429,11 +525,12 @@ async function openTimeline(orderId) {
 }
 $("#modal-close").addEventListener("click", () => {
   $("#modal-back").style.display = "none";
-  selectedOrder = null;
-  document.querySelectorAll(".order").forEach((el) => el.classList.remove("sel"));
 });
 $("#modal-back").addEventListener("click", (e) => {
   if (e.target.id === "modal-back") $("#modal-close").click();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && $("#modal-back").style.display === "flex") $("#modal-close").click();
 });
 
 // ---------- order form ----------
@@ -457,7 +554,7 @@ $("#order-form").addEventListener("submit", async (e) => {
   } catch (err) { toast("Order failed: " + err.message, true); }
 });
 
-// ---------- chaos ----------
+// ---------- chaos lab ----------
 $("#chaos-fail").addEventListener("click", async () => {
   $("#f-total").value = "999.99";
   $("#order-form").requestSubmit();
