@@ -1,83 +1,144 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../config/theme.dart';
 import '../providers/order_provider.dart';
+import '../widgets/premium_widgets.dart';
 
-class OrderConfirmationScreen extends ConsumerWidget {
+/// Premium order confirmation with animated success mark.
+class OrderConfirmationScreen extends ConsumerStatefulWidget {
   final String orderId;
 
-  const OrderConfirmationScreen({
-    Key? key,
-    required this.orderId,
-  }) : super(key: key);
+  const OrderConfirmationScreen({super.key, required this.orderId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<OrderConfirmationScreen> createState() =>
+      _OrderConfirmationScreenState();
+}
+
+class _OrderConfirmationScreenState
+    extends ConsumerState<OrderConfirmationScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _scale = Tween<double>(begin: 0.4, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
+    );
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final checkoutState = ref.watch(checkoutProvider);
 
     return Scaffold(
       body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 100,
-                  height: 100,
+        child: Padding(
+          padding: const EdgeInsets.all(AppTheme.spaceLg),
+          child: Column(
+            children: [
+              const Spacer(),
+              ScaleTransition(
+                scale: _scale,
+                child: Container(
+                  width: 112,
+                  height: 112,
                   decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(50),
+                    color: AppTheme.success
+                        .withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
                   ),
-                  child: const Center(
-                    child: Icon(
-                      Icons.check_circle,
-                      color: Colors.green,
-                      size: 60,
+                  child: const Icon(
+                    Icons.check_circle_rounded,
+                    color: AppTheme.success,
+                    size: 64,
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppTheme.spaceLg),
+              Text(
+                'Order placed!',
+                style:
+                    Theme.of(context).textTheme.displayMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: AppTheme.spaceSm),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  borderRadius: BorderRadius.circular(
+                      AppTheme.radiusSm),
+                  border: Border.all(
+                      color:
+                          Theme.of(context).dividerColor),
+                ),
+                child: Text(
+                  'Order #${widget.orderId.length > 8 ? widget.orderId.substring(0, 8) : widget.orderId}',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(
+                        fontFeatures: const [
+                          FontFeature.tabularFigures()
+                        ],
+                      ),
+                ),
+              ),
+              const SizedBox(height: AppTheme.spaceSm),
+              Text(
+                checkoutState.successMessage ??
+                    'We\'re firing up the kitchen. Track your order live.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(
+                      color: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.color,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+              const Spacer(),
+              PremiumButton(
+                label: 'Track order',
+                icon: Icons.timeline_rounded,
+                onPressed: () => context
+                    .go('/order/${widget.orderId}/tracking'),
+              ),
+              const SizedBox(height: AppTheme.spaceSm),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () => context.go('/'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(
+                          AppTheme.radiusSm),
                     ),
                   ),
+                  child: const Text('Back to home'),
                 ),
-                const SizedBox(height: 32),
-                Text(
-                  'Order Confirmed!',
-                  style: Theme.of(context).textTheme.displaySmall,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Order ID: $orderId',
-                  style: Theme.of(context).textTheme.bodyLarge,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  checkoutState.successMessage ?? 'Your order has been placed successfully.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).hintColor,
-                      ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 48),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: () => context.go('/order/$orderId/tracking'),
-                    child: const Text('Track Order'),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: OutlinedButton(
-                    onPressed: () => context.go('/'),
-                    child: const Text('Continue Shopping'),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
