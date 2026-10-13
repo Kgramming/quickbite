@@ -67,6 +67,14 @@ class FakeLocalStorageService extends LocalStorageService {
   Future<void> clearAll() async {
     _store.clear();
   }
+
+  @override
+  Future<void> saveThemeMode(String mode) async {
+    _store['theme_mode'] = mode;
+  }
+
+  @override
+  String? getThemeMode() => _store['theme_mode'];
 }
 
 /// Regression test for the Web splash-screen hang.
