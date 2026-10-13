@@ -11,46 +11,71 @@ import 'package:quickbite/services/local_storage.dart';
 
 /// Regression test for the Web splash-screen hang.
 ///
-/// Root cause (fixed): GoRouter was recreated on every auth state change
-/// (goRouterProvider watched authStateProvider). When SplashScreen's timer
-/// fired initializeAuth(), the `isLoading: true` state change rebuilt the
-/// router, disposed the SplashScreen, and the `!mounted` guard blocked
-/// navigation forever — an infinite splash loop.
+/// Root cause (fixed in lib/): GoRouter was recreated on every auth state
+/// change (goRouterProvider watched authStateProvider). When SplashScreen's
+/// timer fired initializeAuth(), the `isLoading: true` state change rebuilt
+/// the router, disposed the SplashScreen, and the `!mounted` guard blocked
+/// navigation forever — an infinite splash loop. Fixed via
+/// AuthRefreshNotifier + refreshListenable (router created once).
 ///
-/// This test pumps the app with initialized Hive boxes, advances past the
-/// splash timer, and asserts the app navigates to LoginScreen instead of
-/// getting stuck on SplashScreen.
+/// Timing notes: the test avoids pumpAndSettle() (which waits indefinitely
+/// for animations/frames) and instead pumps in bounded steps, polling for
+/// the expected screen. A 30s timeout converts any hang into a failure
+/// with diagnostics instead of an indefinite stall.
 void main() {
-  testWidgets('splash navigates to login after initialization',
-      (WidgetTester tester) async {
-    // Initialize Hive with a temp directory (no Flutter bindings needed).
-    final tempDir =
-        await Directory.systemTemp.createTemp('quickbite_test');
-    Hive.init(tempDir.path);
-    final storage = LocalStorageService();
-    await storage.init();
+  testWidgets(
+    'splash navigates to login after initialization',
+    (WidgetTester tester) async {
+      print('[TEST] phase 1: creating temp dir');
+      final tempDir =
+          await Directory.systemTemp.createTemp('quickbite_test');
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          localStorageProvider.overrideWithValue(storage),
-        ],
-        child: const QuickBiteApp(),
-      ),
-    );
+      print('[TEST] phase 2: Hive.init');
+      Hive.init(tempDir.path);
 
-    // Splash screen is showing initially.
-    expect(find.byType(SplashScreen), findsOneWidget);
+      print('[TEST] phase 3: opening Hive boxes');
+      final storage = LocalStorageService();
+      await storage.init();
+      print('[TEST] phase 3 done: boxes open');
 
-    // Advance past the 1400ms splash timer and let navigation settle.
-    await tester.pump(const Duration(milliseconds: 1500));
-    await tester.pumpAndSettle();
+      print('[TEST] phase 4: pumpWidget');
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            localStorageProvider.overrideWithValue(storage),
+          ],
+          child: const QuickBiteApp(),
+        ),
+      );
+      print('[TEST] phase 4 done: app pumped');
 
-    // Must navigate to login (not stuck on splash).
-    expect(find.byType(LoginScreen), findsOneWidget);
-    expect(find.byType(SplashScreen), findsNothing);
+      // Splash screen is showing initially.
+      expect(find.byType(SplashScreen), findsOneWidget);
+      print('[TEST] phase 5: splash visible, advancing timer');
 
-    await Hive.close();
-    await tempDir.delete(recursive: true);
-  });
+      // Advance past the 1400ms splash timer in bounded steps, polling
+      // for navigation. Never waits indefinitely.
+      bool navigated = false;
+      for (int i = 0; i < 30; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        if (find.byType(LoginScreen).evaluate().isNotEmpty) {
+          navigated = true;
+          print('[TEST] phase 5 done: navigated to login at step $i');
+          break;
+        }
+      }
+
+      // Must navigate to login (not stuck on splash).
+      expect(navigated, isTrue,
+          reason: 'Timed out waiting for navigation to LoginScreen');
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(find.byType(SplashScreen), findsNothing);
+
+      print('[TEST] phase 6: cleanup');
+      await Hive.close();
+      await tempDir.delete(recursive: true);
+      print('[TEST] done: PASS');
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
 }
