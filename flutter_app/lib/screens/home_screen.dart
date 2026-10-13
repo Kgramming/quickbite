@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../config/theme.dart';
+import '../config/app_themes.dart';
+import '../config/food_images.dart';
 import '../models/restaurant.dart';
 import '../providers/auth_provider.dart';
 import '../providers/restaurant_provider.dart';
+import '../providers/theme_provider.dart';
 import '../widgets/food_image.dart';
-import '../widgets/premium_widgets.dart';
+import '../widgets/qb_shell.dart';
+import '../widgets/qb_widgets.dart';
 
-/// Premium home/discovery screen: greeting, search, cuisine filters,
-/// featured restaurants and rich cards.
+/// Home / Discover screen.
+///
+/// Honest metadata policy: the backend does not provide ratings, cuisines,
+/// or delivery estimates, so the UI never fabricates them. Cards show the
+/// restaurant name, real description, and imagery only.
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -20,7 +26,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
-  String? _selectedCuisine;
 
   @override
   void dispose() {
@@ -30,425 +35,265 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = ref.watch(themeTokensProvider);
     final restaurantsAsync = ref.watch(restaurantsProvider(1));
-    final cartCount = ref.watch(cartItemCountProvider);
     final user = ref.watch(authStateProvider).user;
 
     return Scaffold(
       body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            // Greeting + cart
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                    AppTheme.spaceMd, AppTheme.spaceMd,
-                    AppTheme.spaceMd, AppTheme.spaceSm),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _greeting(),
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1200),
+            child: CustomScrollView(
+              slivers: [
+                // Header
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _greeting(),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                user?.name ?? 'Food lover',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineSmall,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            user?.name ?? 'Food lover',
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineSmall,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
+                        ),
+                        const QbCartButton(),
+                      ],
                     ),
-                    _iconButton(
-                      context,
-                      Icons.shopping_bag_outlined,
-                      () => context.go('/cart'),
-                      badge: cartCount,
-                    ),
-                    const SizedBox(width: AppTheme.spaceSm),
-                    _iconButton(
-                      context,
-                      Icons.person_outline_rounded,
-                      () => context.go('/profile'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            // Search
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: AppTheme.spaceMd,
-                    vertical: AppTheme.spaceSm),
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (v) =>
-                      setState(() => _searchQuery = v.trim().toLowerCase()),
-                  decoration: InputDecoration(
-                    hintText: 'Search restaurants or cuisines…',
-                    prefixIcon:
-                        const Icon(Icons.search_rounded),
-                    suffixIcon: _searchQuery.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear_rounded),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() => _searchQuery = '');
-                            },
-                          )
-                        : null,
                   ),
                 ),
-              ),
-            ),
-            // Content
-            restaurantsAsync.when(
-              data: (page) =>
-                  _buildContent(context, page),
-              loading: () => const SliverFillRemaining(
-                hasScrollBody: false,
-                child: RestaurantListSkeleton(),
-              ),
-              error: (err, _) => SliverFillRemaining(
-                hasScrollBody: false,
-                child: ErrorCard(
-                  message: 'Couldn\'t load restaurants.\n$err',
-                  onRetry: () => ref.invalidate(restaurantsProvider(1)),
+                // Search
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 8),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (v) => setState(
+                          () => _searchQuery = v.trim().toLowerCase()),
+                      decoration: InputDecoration(
+                        hintText:
+                            'Search restaurants or dishes…',
+                        prefixIcon:
+                            const Icon(Icons.search_rounded),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(
+                                    Icons.clear_rounded),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(
+                                      () => _searchQuery = '');
+                                },
+                              )
+                            : null,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: _BottomNav(currentIndex: 0),
-    );
-  }
-
-  Widget _buildContent(BuildContext context, PaginatedRestaurants page) {
-    final cuisines = _cuisinesOf(page.items);
-    var filtered = page.items;
-    if (_selectedCuisine != null) {
-      filtered = filtered
-          .where((r) => r.cuisine == _selectedCuisine)
-          .toList();
-    }
-    if (_searchQuery.isNotEmpty) {
-      filtered = filtered
-          .where((r) =>
-              r.name.toLowerCase().contains(_searchQuery) ||
-              r.cuisine.toLowerCase().contains(_searchQuery) ||
-              r.description.toLowerCase().contains(_searchQuery))
-          .toList();
-    }
-
-    return SliverList(
-      delegate: SliverChildListDelegate([
-        // Cuisine filter chips
-        if (cuisines.isNotEmpty)
-          SizedBox(
-            height: 42,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppTheme.spaceMd),
-              itemCount: cuisines.length + 1,
-              separatorBuilder: (_, __) =>
-                  const SizedBox(width: AppTheme.spaceSm),
-              itemBuilder: (context, i) {
-                if (i == 0) {
-                  return _cuisineChip(context, null, 'All');
-                }
-                final c = cuisines[i - 1];
-                return _cuisineChip(context, c, c);
-              },
-            ),
-          ),
-        const SizedBox(height: AppTheme.spaceSm),
-        // Section header
-        Padding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppTheme.spaceMd),
-          child: SectionHeader(
-            title: _selectedCuisine ?? 'Popular near you',
-          ),
-        ),
-        const SizedBox(height: AppTheme.spaceSm),
-        // Restaurant cards
-        if (filtered.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: AppTheme.spaceXl),
-            child: EmptyState(
-              icon: Icons.search_off_rounded,
-              title: 'No matches',
-              message:
-                  'Try a different search or cuisine filter.',
-            ),
-          )
-        else
-          ...filtered.map((r) => Padding(
-                padding: const EdgeInsets.fromLTRB(
-                    AppTheme.spaceMd, 0,
-                    AppTheme.spaceMd, AppTheme.spaceMd),
-                child: _RestaurantCard(restaurant: r),
-              )),
-        const SizedBox(height: AppTheme.spaceMd),
-      ]),
-    );
-  }
-
-  List<String> _cuisinesOf(List<Restaurant> items) {
-    final set = <String>{};
-    for (final r in items) {
-      if (r.cuisine.isNotEmpty) set.add(r.cuisine);
-    }
-    return set.toList()..sort();
-  }
-
-  Widget _cuisineChip(BuildContext context, String? value, String label) {
-    final selected = _selectedCuisine == value;
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) =>
-          setState(() => _selectedCuisine = value),
-      selectedColor: AppTheme.primary,
-      labelStyle: TextStyle(
-        color: selected ? Colors.white : null,
-        fontWeight: FontWeight.w600,
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-      ),
-    );
-  }
-
-  Widget _iconButton(BuildContext context, IconData icon,
-      VoidCallback onTap, {int badge = 0}) {
-    return Stack(
-      children: [
-        Material(
-          color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-            onTap: onTap,
-            child: Container(
-              width: 44,
-              height: 44,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                borderRadius:
-                    BorderRadius.circular(AppTheme.radiusSm),
-                border:
-                    Border.all(color: Theme.of(context).dividerColor),
-              ),
-              child: Icon(icon, size: 22),
+                // Content
+                restaurantsAsync.when(
+                  data: (page) =>
+                      _buildContent(context, tokens, page),
+                  loading: () => const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: QbLoading(
+                        message: 'Finding great food near you…'),
+                  ),
+                  error: (e, _) => SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: QbErrorState(
+                      message:
+                          'Could not load restaurants. Check your connection and try again.',
+                      onRetry: () =>
+                          ref.invalidate(restaurantsProvider(1)),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
-        if (badge > 0)
-          Positioned(
-            right: 6,
-            top: 6,
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: const BoxDecoration(
-                color: AppTheme.primary,
-                shape: BoxShape.circle,
-              ),
-              constraints: const BoxConstraints(
-                  minWidth: 18, minHeight: 18),
-              child: Text(
-                '$badge',
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ),
-      ],
+      ),
     );
   }
 
   String _greeting() {
     final h = DateTime.now().hour;
-    if (h < 12) return 'Good morning ☀️';
-    if (h < 17) return 'Good afternoon 🌤️';
-    return 'Good evening 🌙';
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
+  Widget _buildContent(
+      BuildContext context, QuickBiteTokens tokens, PaginatedRestaurants page) {
+    final restaurants = page.items.where((r) {
+      if (_searchQuery.isEmpty) return true;
+      return r.name.toLowerCase().contains(_searchQuery) ||
+          r.description.toLowerCase().contains(_searchQuery);
+    }).toList();
+
+    return SliverList(
+      delegate: SliverChildListDelegate([
+        // Featured banner
+        if (_searchQuery.isEmpty && restaurants.isNotEmpty)
+          _FeaturedBanner(
+              tokens: tokens, restaurant: restaurants.first),
+
+        // Section header
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+          child: QbSectionHeader(
+            title: _searchQuery.isEmpty
+                ? 'All restaurants'
+                : '${restaurants.length} result${restaurants.length == 1 ? '' : 's'}',
+          ),
+        ),
+
+        // Restaurant grid
+        if (restaurants.isEmpty)
+          QbEmptyState(
+            icon: Icons.search_off_rounded,
+            title: 'No restaurants found',
+            message: _searchQuery.isEmpty
+                ? 'There are no restaurants available right now.'
+                : 'Try a different search term.',
+          )
+        else
+          Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 20),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final crossAxisCount =
+                    constraints.maxWidth > 900
+                        ? 3
+                        : constraints.maxWidth > 600
+                            ? 2
+                            : 1;
+                return GridView.builder(
+                  shrinkWrap: true,
+                  physics:
+                      const NeverScrollableScrollPhysics(),
+                  gridDelegate:
+                      SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    childAspectRatio: 1.15,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                  ),
+                  itemCount: restaurants.length,
+                  itemBuilder: (context, i) =>
+                      _RestaurantCard(
+                          restaurant: restaurants[i]),
+                );
+              },
+            ),
+          ),
+        const SizedBox(height: 32),
+      ]),
+    );
   }
 }
 
-class _RestaurantCard extends StatelessWidget {
+/// Featured restaurant hero banner.
+class _FeaturedBanner extends StatelessWidget {
+  final QuickBiteTokens tokens;
   final Restaurant restaurant;
 
-  const _RestaurantCard({required this.restaurant});
+  const _FeaturedBanner(
+      {required this.tokens, required this.restaurant});
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).cardColor,
-      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
       child: InkWell(
-        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        borderRadius: BorderRadius.circular(22),
         onTap: () =>
             context.go('/restaurant/${restaurant.id}'),
         child: Container(
+          height: 200,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-            boxShadow: AppTheme.cardShadow(context),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Stack(
-                children: [
-                  FoodImage(
-                    height: 148,
-                    width: double.infinity,
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(AppTheme.radiusMd),
-                    ),
-                    fallbackIcon: Icons.restaurant_rounded,
-                  ),
-                  Positioned(
-                    top: 10,
-                    left: 10,
-                    child: RatingBadge(
-                        rating: restaurant.rating, large: true),
-                  ),
-                  if (!restaurant.isOpen)
-                    Positioned.fill(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.55),
-                          borderRadius:
-                              const BorderRadius.vertical(
-                            top: Radius.circular(AppTheme.radiusMd),
-                          ),
-                        ),
-                        alignment: Alignment.center,
-                        child: const Text(
-                          'Currently closed',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.all(AppTheme.spaceMd),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            restaurant.name,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppTheme.secondary
-                                .withValues(alpha: 0.14),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            restaurant.cuisine,
-                            style: const TextStyle(
-                              color: AppTheme.secondary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (restaurant.description.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        restaurant.description,
-                        style:
-                            Theme.of(context).textTheme.bodySmall,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                    const SizedBox(height: AppTheme.spaceSm),
-                    Row(
-                      children: [
-                        Icon(Icons.timer_outlined,
-                            size: 15,
-                            color: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.color),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${restaurant.deliveryTimeMinutes} min',
-                          style:
-                              Theme.of(context).textTheme.bodySmall,
-                        ),
-                        const SizedBox(width: AppTheme.spaceMd),
-                        Icon(Icons.delivery_dining_outlined,
-                            size: 15,
-                            color: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.color),
-                        const SizedBox(width: 4),
-                        Text(
-                          restaurant.deliveryFeeMinor == 0
-                              ? 'Free delivery'
-                              : restaurant.deliveryFee,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(
-                                color:
-                                    restaurant.deliveryFeeMinor == 0
-                                        ? AppTheme.success
-                                        : null,
-                                fontWeight:
-                                    restaurant.deliveryFeeMinor == 0
-                                        ? FontWeight.w700
-                                        : null,
-                              ),
-                        ),
-                        const Spacer(),
-                        const Icon(
-                            Icons.arrow_forward_ios_rounded,
-                            size: 14,
-                            color: AppTheme.primary),
-                      ],
-                    ),
-                  ],
+            borderRadius: BorderRadius.circular(22),
+            image: DecorationImage(
+              image: NetworkImage(
+                QuickBiteImages.forRestaurant(
+                  restaurantId: restaurant.id,
+                  restaurantName: restaurant.name,
+                  backendImageUrl: restaurant.imageUrl,
                 ),
               ),
-            ],
+              fit: BoxFit.cover,
+              onError: (_, __) {},
+            ),
+          ),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  Colors.black.withValues(alpha: 0.75),
+                ],
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: tokens.primary,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text('FEATURED',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.2,
+                            color: tokens.onPrimary)),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(restaurant.name,
+                      style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white)),
+                  Text(restaurant.description,
+                      style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.white
+                              .withValues(alpha: 0.85)),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -456,47 +301,115 @@ class _RestaurantCard extends StatelessWidget {
   }
 }
 
-/// Shared bottom navigation used by top-level screens.
-class _BottomNav extends StatelessWidget {
-  final int currentIndex;
+/// Restaurant card with honest metadata (no fake ratings).
+class _RestaurantCard extends ConsumerWidget {
+  final Restaurant restaurant;
 
-  const _BottomNav({required this.currentIndex});
+  const _RestaurantCard({required this.restaurant});
 
   @override
-  Widget build(BuildContext context) {
-    return NavigationBar(
-      selectedIndex: currentIndex,
-      onDestinationSelected: (i) {
-        if (i == currentIndex) return;
-        switch (i) {
-          case 0:
-            context.go('/');
-            break;
-          case 1:
-            context.go('/orders');
-            break;
-          case 2:
-            context.go('/profile');
-            break;
-        }
-      },
-      destinations: const [
-        NavigationDestination(
-          icon: Icon(Icons.home_outlined),
-          selectedIcon: Icon(Icons.home_rounded),
-          label: 'Home',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.receipt_long_outlined),
-          selectedIcon: Icon(Icons.receipt_long_rounded),
-          label: 'Orders',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.person_outline_rounded),
-          selectedIcon: Icon(Icons.person_rounded),
-          label: 'Profile',
-        ),
-      ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(themeTokensProvider);
+    return QbCard(
+      padding: EdgeInsets.zero,
+      onTap: () => context.go('/restaurant/${restaurant.id}'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Image
+          ClipRRect(
+            borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(16)),
+            child: AspectRatio(
+              aspectRatio: 16 / 9,
+              child: FoodImage(
+                imageUrl: QuickBiteImages.forRestaurant(
+                  restaurantId: restaurant.id,
+                  restaurantName: restaurant.name,
+                  backendImageUrl: restaurant.imageUrl,
+                ),
+                width: double.infinity,
+                borderRadius: BorderRadius.zero,
+              ),
+            ),
+          ),
+          // Info
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: [
+                  Text(restaurant.name,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(fontSize: 16),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 4),
+                  Text(restaurant.description,
+                      style:
+                          Theme.of(context).textTheme.bodySmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  const Spacer(),
+                  // Only show rating if the backend provided one.
+                  if (restaurant.hasRating)
+                    Row(
+                      children: [
+                        Container(
+                          padding:
+                              const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3),
+                          decoration: BoxDecoration(
+                            color: tokens.success,
+                            borderRadius:
+                                BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.star_rounded,
+                                  size: 14,
+                                  color: Colors.white),
+                              const SizedBox(width: 2),
+                              Text(
+                                  restaurant.rating
+                                      .toStringAsFixed(1),
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight:
+                                          FontWeight.w700,
+                                      color: Colors.white)),
+                            ],
+                          ),
+                        ),
+                        if (restaurant
+                            .hasDeliveryEstimate) ...[
+                          const SizedBox(width: 8),
+                          Icon(
+                              Icons
+                                  .delivery_dining_outlined,
+                              size: 16,
+                              color: tokens.muted),
+                          const SizedBox(width: 4),
+                          Text(
+                              '${restaurant.deliveryTimeMinutes} min',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall),
+                        ],
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../config/theme.dart';
+import '../providers/theme_provider.dart';
 import '../providers/order_provider.dart';
 import '../widgets/premium_widgets.dart';
 
@@ -44,11 +44,12 @@ class _OrderConfirmationScreenState
   @override
   Widget build(BuildContext context) {
     final checkoutState = ref.watch(checkoutProvider);
+    final tokens = ref.watch(themeTokensProvider);
 
     return Scaffold(
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(AppTheme.spaceLg),
+          padding: const EdgeInsets.all(24),
           child: Column(
             children: [
               const Spacer(),
@@ -58,32 +59,32 @@ class _OrderConfirmationScreenState
                   width: 112,
                   height: 112,
                   decoration: BoxDecoration(
-                    color: AppTheme.success
+                    color: tokens.success
                         .withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.check_circle_rounded,
-                    color: AppTheme.success,
+                    color: tokens.success,
                     size: 64,
                   ),
                 ),
               ),
-              const SizedBox(height: AppTheme.spaceLg),
+              const SizedBox(height: 24),
               Text(
                 'Order placed!',
                 style:
                     Theme.of(context).textTheme.displayMedium,
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: AppTheme.spaceSm),
+              const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(
                     horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
                   color: Theme.of(context).cardColor,
                   borderRadius: BorderRadius.circular(
-                      AppTheme.radiusSm),
+                      12),
                   border: Border.all(
                       color:
                           Theme.of(context).dividerColor),
@@ -100,7 +101,7 @@ class _OrderConfirmationScreenState
                       ),
                 ),
               ),
-              const SizedBox(height: AppTheme.spaceSm),
+              const SizedBox(height: 8),
               Text(
                 checkoutState.successMessage ??
                     'We\'re firing up the kitchen. Track your order live.',
@@ -122,7 +123,7 @@ class _OrderConfirmationScreenState
                 onPressed: () => context
                     .go('/order/${widget.orderId}/tracking'),
               ),
-              const SizedBox(height: AppTheme.spaceSm),
+              const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(
@@ -132,7 +133,7 @@ class _OrderConfirmationScreenState
                         vertical: 15),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(
-                          AppTheme.radiusSm),
+                          12),
                     ),
                   ),
                   child: const Text('Back to home'),

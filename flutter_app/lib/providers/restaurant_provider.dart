@@ -4,14 +4,14 @@ import '../services/api_client.dart';
 
 final restaurantsProvider =
     FutureProvider.family<PaginatedRestaurants, int>((ref, page) async {
-  final apiClient = ref.watch(apiClientProvider);
+  final apiClient = ref.watch(authenticatedApiClientProvider);
   return apiClient.getRestaurants(page: page, pageSize: 20);
 });
 
 final restaurantMenuProvider = FutureProvider.family<RestaurantMenu, (String, int)>(
     (ref, params) async {
   final (restaurantId, page) = params;
-  final apiClient = ref.watch(apiClientProvider);
+  final apiClient = ref.watch(authenticatedApiClientProvider);
   return apiClient.getRestaurantMenu(restaurantId: restaurantId, page: page, pageSize: 50);
 });
 

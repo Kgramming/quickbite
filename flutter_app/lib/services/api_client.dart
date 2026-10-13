@@ -4,6 +4,7 @@ import '../config/app_config.dart';
 import '../models/user.dart';
 import '../models/order.dart';
 import '../models/restaurant.dart';
+import 'local_storage.dart';
 
 /// QuickBite API Client using Dio
 class QuickBiteApiClient {
@@ -123,6 +124,44 @@ class QuickBiteApiClient {
     }
   }
 
+  // ==================== Admin (role-protected) ====================
+
+  /// GET /api/v1/admin/orders — cross-customer order overview.
+  /// Requires admin role (backend enforces via require_admin).
+  Future<PaginatedOrders> getAdminOrders({
+    int page = 1,
+    int pageSize = 20,
+    String? status,
+  }) async {
+    try {
+      final response = await dio.get(
+        '${AppConfig.apiPath}/admin/orders',
+        queryParameters: {
+          'page': page,
+          'page_size': pageSize,
+          if (status != null) 'status': status,
+        },
+      );
+      return PaginatedOrders.fromJson(response.data);
+    } on DioException catch (e) {
+      _handleError(e);
+      rethrow;
+    }
+  }
+
+  /// GET /api/v1/admin/summary — counts by status plus outbox/retry/
+  /// quarantine backlog depths. Requires admin role.
+  Future<AdminSummary> getAdminSummary() async {
+    try {
+      final response =
+          await dio.get('${AppConfig.apiPath}/admin/summary');
+      return AdminSummary.fromJson(response.data);
+    } on DioException catch (e) {
+      _handleError(e);
+      rethrow;
+    }
+  }
+
   Future<Order> getOrder(String orderId) async {
     try {
       final response = await dio.get('${AppConfig.apiPath}/orders/$orderId');
@@ -221,6 +260,43 @@ class HealthResponse {
 
 // ==================== Providers ====================
 
+/// Reads the current auth token from storage.
+///
+/// NOTE: [localStorageProvider] is a plain Provider that never notifies, so
+/// this provider evaluates once. The auth interceptor below does NOT rely on
+/// this value being reactive — it reads the live storage service on every
+/// request (see [_AuthInterceptor]), so login/logout are always reflected.
+final rawTokenProvider = Provider<String?>((ref) {
+  return ref.watch(localStorageProvider).getToken();
+});
+
+/// Dio interceptor that attaches `Authorization: Bearer <token>` to every
+/// outgoing request (except the login endpoint).
+///
+/// Reads the token from [LocalStorageService] on EACH request — never caches
+/// it — so the header is always fresh after login, and absent after logout.
+class _AuthInterceptor extends Interceptor {
+  _AuthInterceptor(this._ref);
+
+  final Ref _ref;
+
+  @override
+  void onRequest(
+      RequestOptions options, RequestInterceptorHandler handler) {
+    // Never attach auth to the login call itself.
+    final isLogin = options.path.endsWith('/auth/login');
+    if (!isLogin) {
+      // Live read: LocalStorageService.getToken() hits the open Hive box
+      // synchronously, so this is always the current token.
+      final token = _ref.read(localStorageProvider).getToken();
+      if (token != null && token.isNotEmpty) {
+        options.headers['Authorization'] = 'Bearer $token';
+      }
+    }
+    handler.next(options);
+  }
+}
+
 final dioProvider = Provider<Dio>((ref) {
   final dio = Dio(
     BaseOptions(
@@ -234,6 +310,8 @@ final dioProvider = Provider<Dio>((ref) {
       },
     ),
   );
+
+  dio.interceptors.add(_AuthInterceptor(ref));
 
   dio.interceptors.add(
     LogInterceptor(
@@ -251,8 +329,10 @@ final apiClientProvider = Provider<QuickBiteApiClient>((ref) {
   return QuickBiteApiClient(dio: dio, baseUrl: AppConfig.baseUrl);
 });
 
+/// Authenticated Dio — same instance as [dioProvider]; the [_AuthInterceptor]
+/// attaches the bearer token per request. Kept as a separate provider for
+/// readability at call sites that require authentication.
 final authenticatedDioProvider = Provider<Dio>((ref) {
-  // Token will be added by auth provider in auth interceptor
   return ref.watch(dioProvider);
 });
 

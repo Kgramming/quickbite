@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'config/theme.dart';
+import 'config/app_themes.dart';
 import 'config/router.dart';
+import 'providers/theme_provider.dart';
 import 'services/local_storage.dart';
 
 void main() async {
@@ -33,11 +34,12 @@ class QuickBiteApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(goRouterProvider);
+    final themeMode = ref.watch(themeModeProvider);
+    final tokens = QuickBiteThemes.of(themeMode);
 
     return MaterialApp.router(
       title: 'QuickBite',
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
+      theme: QuickBiteThemes.themeData(tokens),
       routerConfig: router,
       debugShowCheckedModeBanner: false,
     );

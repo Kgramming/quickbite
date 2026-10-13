@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../config/theme.dart';
+import '../providers/theme_provider.dart';
+import '../config/app_themes.dart';
 import '../models/order.dart';
 import '../providers/order_provider.dart';
 import '../widgets/order_widgets.dart';
@@ -17,6 +18,7 @@ class OrderTrackingScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final orderStream = ref.watch(orderStatusRefreshProvider(orderId));
+    final tokens = ref.watch(themeTokensProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -35,7 +37,7 @@ class OrderTrackingScreen extends ConsumerWidget {
         ],
       ),
       body: orderStream.when(
-        data: (order) => _buildBody(context, order),
+        data: (order) => _buildBody(context, order, tokens),
         loading: () => const Center(
             child: CircularProgressIndicator()),
         error: (err, _) => ErrorCard(
@@ -47,23 +49,24 @@ class OrderTrackingScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildBody(BuildContext context, Order order) {
+  Widget _buildBody(
+      BuildContext context, Order order, QuickBiteTokens tokens) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppTheme.spaceMd),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Order header card
           Container(
-            padding: const EdgeInsets.all(AppTheme.spaceMd),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              gradient: AppTheme.brandGradient,
+              gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [tokens.primary, tokens.primaryDark]),
               borderRadius:
-                  BorderRadius.circular(AppTheme.radiusMd),
+                  BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
                   color:
-                      AppTheme.primary.withValues(alpha: 0.3),
+                      tokens.primary.withValues(alpha: 0.3),
                   blurRadius: 16,
                   offset: const Offset(0, 6),
                 ),
@@ -125,15 +128,15 @@ class OrderTrackingScreen extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(height: AppTheme.spaceMd),
+          const SizedBox(height: 16),
           // Timeline card
           Container(
-            padding: const EdgeInsets.all(AppTheme.spaceMd),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Theme.of(context).cardColor,
               borderRadius:
-                  BorderRadius.circular(AppTheme.radiusMd),
-              boxShadow: AppTheme.cardShadow(context),
+                  BorderRadius.circular(16),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 16, offset: const Offset(0, 6))],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -141,7 +144,7 @@ class OrderTrackingScreen extends ConsumerWidget {
                 Text('Status',
                     style:
                         Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: AppTheme.spaceMd),
+                const SizedBox(height: 16),
                 Consumer(
                   builder: (context, ref, _) {
                     final historyAsync =
@@ -170,31 +173,31 @@ class OrderTrackingScreen extends ConsumerWidget {
           // Failure banner
           if (order.status == OrderStatus.paymentFailed ||
               order.status == OrderStatus.failed) ...[
-            const SizedBox(height: AppTheme.spaceMd),
+            const SizedBox(height: 16),
             Container(
               padding:
-                  const EdgeInsets.all(AppTheme.spaceMd),
+                  const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color:
-                    AppTheme.danger.withValues(alpha: 0.08),
+                    tokens.danger.withValues(alpha: 0.08),
                 borderRadius:
-                    BorderRadius.circular(AppTheme.radiusMd),
+                    BorderRadius.circular(16),
                 border: Border.all(
-                    color: AppTheme.danger
+                    color: tokens.danger
                         .withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.error_outline_rounded,
-                      color: AppTheme.danger),
-                  const SizedBox(width: AppTheme.spaceSm),
+                  Icon(Icons.error_outline_rounded,
+                      color: tokens.danger),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       order.failureCode != null
                           ? 'Failed: ${order.failureCode}'
                           : 'This order could not be completed.',
-                      style: const TextStyle(
-                          color: AppTheme.danger,
+                      style: TextStyle(
+                          color: tokens.danger,
                           fontWeight: FontWeight.w600),
                     ),
                   ),
@@ -202,17 +205,17 @@ class OrderTrackingScreen extends ConsumerWidget {
               ),
             ),
           ],
-          const SizedBox(height: AppTheme.spaceMd),
+          const SizedBox(height: 16),
           // Driver card
           if (order.driver != null)
             Container(
               padding:
-                  const EdgeInsets.all(AppTheme.spaceMd),
+                  const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Theme.of(context).cardColor,
                 borderRadius:
-                    BorderRadius.circular(AppTheme.radiusMd),
-                boxShadow: AppTheme.cardShadow(context),
+                    BorderRadius.circular(16),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 16, offset: const Offset(0, 6))],
               ),
               child: Row(
                 children: [
@@ -220,16 +223,16 @@ class OrderTrackingScreen extends ConsumerWidget {
                     width: 52,
                     height: 52,
                     decoration: BoxDecoration(
-                      color: AppTheme.success
+                      color: tokens.success
                           .withValues(alpha: 0.12),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
+                    child: Icon(
                         Icons.delivery_dining_rounded,
-                        color: AppTheme.success,
+                        color: tokens.success,
                         size: 28),
                   ),
-                  const SizedBox(width: AppTheme.spaceMd),
+                  const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment:
@@ -255,15 +258,15 @@ class OrderTrackingScreen extends ConsumerWidget {
               ),
             ),
           if (order.driver != null)
-            const SizedBox(height: AppTheme.spaceMd),
+            const SizedBox(height: 16),
           // Items + address card
           Container(
-            padding: const EdgeInsets.all(AppTheme.spaceMd),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Theme.of(context).cardColor,
               borderRadius:
-                  BorderRadius.circular(AppTheme.radiusMd),
-              boxShadow: AppTheme.cardShadow(context),
+                  BorderRadius.circular(16),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 16, offset: const Offset(0, 6))],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -271,7 +274,7 @@ class OrderTrackingScreen extends ConsumerWidget {
                 Text('Items',
                     style:
                         Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: AppTheme.spaceSm),
+                const SizedBox(height: 8),
                 for (final item in order.items)
                   Padding(
                     padding: const EdgeInsets.symmetric(
@@ -280,14 +283,14 @@ class OrderTrackingScreen extends ConsumerWidget {
                       children: [
                         Text(
                           '×${item.quantity}',
-                          style: const TextStyle(
-                            color: AppTheme.primary,
+                          style: TextStyle(
+                            color: tokens.primary,
                             fontWeight: FontWeight.w800,
                             fontSize: 13,
                           ),
                         ),
                         const SizedBox(
-                            width: AppTheme.spaceSm),
+                            width: 8),
                         Expanded(
                           child: Text(item.name,
                               style: Theme.of(context)
@@ -307,9 +310,9 @@ class OrderTrackingScreen extends ConsumerWidget {
                 const Divider(height: 20),
                 Row(
                   children: [
-                    const Icon(Icons.location_on_outlined,
-                        size: 18, color: AppTheme.primary),
-                    const SizedBox(width: AppTheme.spaceSm),
+                    Icon(Icons.location_on_outlined,
+                        size: 18, color: tokens.primary),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         order.deliveryAddress,
@@ -323,7 +326,7 @@ class OrderTrackingScreen extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(height: AppTheme.spaceMd),
+          const SizedBox(height: 16),
         ],
       ),
     );

@@ -9,6 +9,7 @@ class Restaurant extends Equatable {
   final int deliveryTimeMinutes;
   final int deliveryFeeMinor;
   final bool isOpen;
+  final String? imageUrl;
 
   const Restaurant({
     required this.id,
@@ -19,7 +20,15 @@ class Restaurant extends Equatable {
     required this.deliveryTimeMinutes,
     required this.deliveryFeeMinor,
     required this.isOpen,
+    this.imageUrl,
   });
+
+  /// Whether the backend actually provided a rating (vs the 0.0 default).
+  /// UI must use this to avoid displaying fabricated 0.0 ratings.
+  bool get hasRating => rating > 0;
+
+  /// Whether the backend provided a delivery estimate.
+  bool get hasDeliveryEstimate => deliveryTimeMinutes > 0;
 
   factory Restaurant.fromJson(Map<String, dynamic> json) {
     return Restaurant(
@@ -30,7 +39,11 @@ class Restaurant extends Equatable {
       rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
       deliveryTimeMinutes: json['delivery_time_minutes'] as int? ?? 0,
       deliveryFeeMinor: json['delivery_fee_minor'] as int? ?? 0,
-      isOpen: json['is_open'] as bool? ?? false,
+      // Backend sends `is_active`; accept both.
+      isOpen: (json['is_active'] as bool?) ??
+          (json['is_open'] as bool?) ??
+          false,
+      imageUrl: (json['image_url'] as String?) ?? (json['image'] as String?),
     );
   }
 
@@ -43,6 +56,7 @@ class Restaurant extends Equatable {
         'delivery_time_minutes': deliveryTimeMinutes,
         'delivery_fee_minor': deliveryFeeMinor,
         'is_open': isOpen,
+        'image_url': imageUrl,
       };
 
   String get deliveryFee {
@@ -61,6 +75,7 @@ class Restaurant extends Equatable {
         deliveryTimeMinutes,
         deliveryFeeMinor,
         isOpen,
+        imageUrl,
       ];
 }
 
@@ -125,8 +140,12 @@ class MenuItem extends Equatable {
       name: json['name'] as String? ?? '',
       description: json['description'] as String? ?? '',
       priceMinor: json['price_minor'] as int? ?? 0,
-      available: json['available'] as bool? ?? false,
-      image: json['image'] as String?,
+      // Backend sends `is_available`; accept both for forward compatibility.
+      available: (json['is_available'] as bool?) ??
+          (json['available'] as bool?) ??
+          false,
+      // Backend sends `image_url`; accept both.
+      image: (json['image_url'] as String?) ?? (json['image'] as String?),
     );
   }
 

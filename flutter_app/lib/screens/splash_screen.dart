@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:async';
-import '../config/theme.dart';
 import '../providers/auth_provider.dart';
+import '../providers/theme_provider.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -55,9 +55,16 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    final tokens = ref.watch(themeTokensProvider);
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(gradient: AppTheme.brandGradient),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [tokens.primary, tokens.primaryDark],
+          ),
+        ),
         child: SafeArea(
           child: Center(
             child: FadeTransition(
@@ -73,7 +80,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius:
-                            BorderRadius.circular(AppTheme.radiusLg),
+                            BorderRadius.circular(22),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.25),
@@ -82,11 +89,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                           ),
                         ],
                       ),
-                      child: const Center(
+                      child: Center(
                         child: Text(
                           'QB',
                           style: TextStyle(
-                            color: AppTheme.primary,
+                            color: tokens.primary,
                             fontSize: 44,
                             fontWeight: FontWeight.w800,
                             letterSpacing: -1.5,
@@ -94,7 +101,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                         ),
                       ),
                     ),
-                    const SizedBox(height: AppTheme.spaceLg),
+                    const SizedBox(height: 24),
                     const Text(
                       'QuickBite',
                       style: TextStyle(
@@ -104,7 +111,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                         letterSpacing: -0.8,
                       ),
                     ),
-                    const SizedBox(height: AppTheme.spaceXs),
+                    const SizedBox(height: 4),
                     Text(
                       'Good food, fast.',
                       style: TextStyle(
@@ -112,7 +119,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                         fontSize: 16,
                       ),
                     ),
-                    const SizedBox(height: AppTheme.spaceXl),
+                    const SizedBox(height: 32),
                     const SizedBox(
                       width: 28,
                       height: 28,

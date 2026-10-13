@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../config/theme.dart';
+import '../providers/theme_provider.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/premium_widgets.dart';
 
@@ -92,7 +92,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             content: Text('Login failed: $e'),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+              borderRadius: BorderRadius.circular(12),
             ),
           ),
         );
@@ -103,7 +103,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final tokens = ref.watch(themeTokensProvider);
 
     return Scaffold(
       body: Container(
@@ -111,9 +111,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: isDark
-                ? [const Color(0xFF2A1A14), AppTheme.darkBg]
-                : [const Color(0xFFFFF1E8), AppTheme.lightBg],
+            colors: [
+              tokens.accentSoft,
+              tokens.background,
+            ],
             stops: const [0.0, 0.45],
           ),
         ),
@@ -124,23 +125,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               position: _slideUp,
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: AppTheme.spaceLg),
+                    horizontal: 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(height: AppTheme.spaceXl),
+                    const SizedBox(height: 32),
                     // Brand mark
                     Center(
                       child: Container(
                         width: 92,
                         height: 92,
                         decoration: BoxDecoration(
-                          gradient: AppTheme.brandGradient,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              tokens.primary,
+                              tokens.primaryDark
+                            ],
+                          ),
                           borderRadius: BorderRadius.circular(
-                              AppTheme.radiusLg),
+                              22),
                           boxShadow: [
                             BoxShadow(
-                              color: AppTheme.primary
+                              color: tokens.primary
                                   .withValues(alpha: 0.4),
                               blurRadius: 24,
                               offset: const Offset(0, 10),
@@ -160,13 +168,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                         ),
                       ),
                     ),
-                    const SizedBox(height: AppTheme.spaceLg),
+                    const SizedBox(height: 24),
                     Text(
                       'Welcome to QuickBite',
                       style: Theme.of(context).textTheme.displayMedium,
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: AppTheme.spaceXs),
+                    const SizedBox(height: 4),
                     Text(
                       'Craving something delicious?\nSign in and let\'s fix that.',
                       style: Theme.of(context)
@@ -179,7 +187,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                   ?.color),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: AppTheme.spaceXl),
+                    const SizedBox(height: 32),
                     // Email
                     TextField(
                       controller: _emailController,
@@ -192,7 +200,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                         errorText: _emailError,
                       ),
                     ),
-                    const SizedBox(height: AppTheme.spaceMd),
+                    const SizedBox(height: 16),
                     // Password
                     TextField(
                       controller: _passwordController,
@@ -215,7 +223,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                         ),
                       ),
                     ),
-                    const SizedBox(height: AppTheme.spaceLg),
+                    const SizedBox(height: 24),
                     PremiumButton(
                       label: 'Sign In',
                       icon: Icons.login_rounded,
@@ -224,44 +232,44 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           authState.isLoading ? null : _validateAndLogin,
                     ),
                     if (authState.error != null) ...[
-                      const SizedBox(height: AppTheme.spaceMd),
+                      const SizedBox(height: 16),
                       Container(
-                        padding: const EdgeInsets.all(AppTheme.spaceMd),
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: AppTheme.danger.withValues(alpha: 0.08),
+                          color: tokens.danger.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(
-                              AppTheme.radiusSm),
+                              12),
                           border: Border.all(
                             color:
-                                AppTheme.danger.withValues(alpha: 0.3),
+                                tokens.danger.withValues(alpha: 0.3),
                           ),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.error_outline_rounded,
-                                color: AppTheme.danger, size: 20),
-                            const SizedBox(width: AppTheme.spaceSm),
+                            Icon(Icons.error_outline_rounded,
+                                color: tokens.danger, size: 20),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 authState.error!,
-                                style: const TextStyle(
-                                    color: AppTheme.danger, fontSize: 13),
+                                style: TextStyle(
+                                    color: tokens.danger, fontSize: 13),
                               ),
                             ),
                           ],
                         ),
                       ),
                     ],
-                    const SizedBox(height: AppTheme.spaceXl),
+                    const SizedBox(height: 32),
                     // Demo hint
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: AppTheme.spaceMd,
-                          vertical: AppTheme.spaceSm),
+                          horizontal: 16,
+                          vertical: 8),
                       decoration: BoxDecoration(
                         color: Theme.of(context).cardColor,
                         borderRadius:
-                            BorderRadius.circular(AppTheme.radiusSm),
+                            BorderRadius.circular(12),
                         border: Border.all(
                             color: Theme.of(context).dividerColor),
                       ),
@@ -274,7 +282,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                   .textTheme
                                   .bodySmall
                                   ?.color),
-                          const SizedBox(width: AppTheme.spaceXs),
+                          const SizedBox(width: 4),
                           Flexible(
                             child: Text(
                               'Demo: customer@example.com / customer123',
@@ -285,7 +293,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                         ],
                       ),
                     ),
-                    const SizedBox(height: AppTheme.spaceLg),
+                    const SizedBox(height: 24),
                   ],
                 ),
               ),

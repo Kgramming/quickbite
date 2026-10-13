@@ -1,168 +1,184 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../config/theme.dart';
 import '../models/order.dart';
 import '../providers/order_provider.dart';
-import '../widgets/order_widgets.dart';
-import '../widgets/premium_widgets.dart';
-import '../widgets/food_image.dart';
+import '../providers/theme_provider.dart';
+import '../widgets/qb_widgets.dart';
 
-/// Premium order history: rich order cards with status pills.
+/// Order history from the real API.
+///
+/// Shows order cards with actual status, amounts in INR, and item counts.
+/// A polished empty state appears when the customer has no orders.
 class OrderHistoryScreen extends ConsumerWidget {
   const OrderHistoryScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final orders = ref.watch(ordersListProvider(1));
+    final ordersAsync = ref.watch(ordersListProvider(1));
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Your orders'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => context.pop(),
-        ),
-      ),
-      body: orders.when(
-        data: (data) {
-          if (data.items.isEmpty) {
-            return EmptyState(
-              icon: Icons.receipt_long_outlined,
-              title: 'No orders yet',
+      appBar: AppBar(title: const Text('My orders')),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: ordersAsync.when(
+            data: (page) {
+              if (page.items.isEmpty) {
+                return QbEmptyState(
+                  icon: Icons.receipt_long_outlined,
+                  title: 'No orders yet',
+                  message:
+                      'Your order history will appear here once you place your first order.',
+                  actionLabel: 'Order now',
+                  onAction: () => context.go('/'),
+                );
+              }
+              return RefreshIndicator(
+                onRefresh: () async =>
+                    ref.invalidate(ordersListProvider(1)),
+                child: ListView.separated(
+                  padding: const EdgeInsets.all(20),
+                  itemCount: page.items.length,
+                  separatorBuilder: (_, __) =>
+                      const SizedBox(height: 12),
+                  itemBuilder: (context, i) =>
+                      _OrderCard(order: page.items[i]),
+                ),
+              );
+            },
+            loading: () => const QbLoading(
+                message: 'Loading your orders…'),
+            error: (e, _) => QbErrorState(
               message:
-                  'When you place an order, it will show up here.',
-              actionLabel: 'Order something tasty',
-              onAction: () => context.go('/'),
-            );
-          }
-          return RefreshIndicator(
-            onRefresh: () async =>
-                ref.invalidate(ordersListProvider(1)),
-            child: ListView.separated(
-              padding:
-                  const EdgeInsets.all(AppTheme.spaceMd),
-              itemCount: data.items.length,
-              separatorBuilder: (_, __) =>
-                  const SizedBox(height: AppTheme.spaceSm),
-              itemBuilder: (context, i) =>
-                  _OrderCard(order: data.items[i]),
+                  'Could not load orders. Check your connection and try again.',
+              onRetry: () =>
+                  ref.invalidate(ordersListProvider(1)),
             ),
-          );
-        },
-        loading: () => ListView.separated(
-          padding: const EdgeInsets.all(AppTheme.spaceMd),
-          itemCount: 4,
-          separatorBuilder: (_, __) =>
-              const SizedBox(height: AppTheme.spaceSm),
-          itemBuilder: (_, __) =>
-              const SkeletonCard(height: 108),
-        ),
-        error: (err, _) => ErrorCard(
-          message: 'Couldn\'t load your orders.\n$err',
-          onRetry: () =>
-              ref.invalidate(ordersListProvider(1)),
+          ),
         ),
       ),
     );
   }
 }
 
-class _OrderCard extends StatelessWidget {
+class _OrderCard extends ConsumerWidget {
   final Order order;
-
   const _OrderCard({required this.order});
 
   @override
-  Widget build(BuildContext context) {
-    final itemSummary = order.items.isEmpty
-        ? 'No items'
-        : order.items
-            .map((i) => '${i.quantity}× ${i.name}')
-            .join(', ');
-    return Material(
-      color: Theme.of(context).cardColor,
-      borderRadius:
-          BorderRadius.circular(AppTheme.radiusMd),
-      child: InkWell(
-        borderRadius:
-            BorderRadius.circular(AppTheme.radiusMd),
-        onTap: () =>
-            context.go('/order/${order.id}/tracking'),
-        child: Container(
-          padding:
-              const EdgeInsets.all(AppTheme.spaceMd),
-          decoration: BoxDecoration(
-            borderRadius:
-                BorderRadius.circular(AppTheme.radiusMd),
-            boxShadow: AppTheme.cardShadow(context),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(themeTokensProvider);
+    final statusColor = _statusColor(order.status, tokens);
+
+    return QbCard(
+      onTap: () => context.go('/order/${order.id}/tracking'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Order #${order.id.length > 8 ? order.id.substring(0, 8) : order.id}',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium,
-                    ),
-                  ),
-                  StatusPill(status: order.status),
-                ],
+              Expanded(
+                child: Text(
+                  'Order #${order.id.length > 8 ? order.id.substring(0, 8) : order.id}',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
               ),
-              const SizedBox(height: AppTheme.spaceXs),
-              Text(
-                itemSummary,
-                style:
-                    Theme.of(context).textTheme.bodySmall,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: AppTheme.spaceSm),
-              Row(
-                children: [
-                  Icon(Icons.calendar_today_outlined,
-                      size: 14,
-                      color: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.color),
-                  const SizedBox(width: 4),
-                  Text(
-                    _formatDate(order.createdAt),
-                    style:
-                        Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const Spacer(),
-                  Text(
-                    order.displayPrice,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleLarge
-                        ?.copyWith(color: AppTheme.primary),
-                  ),
-                  const SizedBox(width: 4),
-                  const Icon(
-                      Icons.arrow_forward_ios_rounded,
-                      size: 13,
-                      color: AppTheme.primary),
-                ],
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  _statusLabel(order.status),
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: statusColor),
+                ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 8),
+          Text(
+            '${order.items.length} item${order.items.length == 1 ? '' : 's'} · ${_formatDate(order.createdAt)}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            order.items
+                .take(3)
+                .map((i) => '${i.quantity}× ${i.name}')
+                .join(', ') +
+                (order.items.length > 3
+                    ? ' +${order.items.length - 3} more'
+                    : ''),
+            style: Theme.of(context).textTheme.bodyMedium,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const Divider(height: 20),
+          Row(
+            children: [
+              Text('Total',
+                  style:
+                      Theme.of(context).textTheme.bodySmall),
+              const Spacer(),
+              Text(formatInr(order.totalAmountMinor),
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: tokens.primary)),
+            ],
+          ),
+        ],
       ),
     );
   }
 
+  String _statusLabel(OrderStatus s) {
+    switch (s) {
+      case OrderStatus.pending:
+        return 'Pending';
+      case OrderStatus.paid:
+        return 'Paid';
+      case OrderStatus.confirmed:
+        return 'Confirmed';
+      case OrderStatus.driverAssigned:
+        return 'On the way';
+      case OrderStatus.paymentFailed:
+        return 'Payment failed';
+      case OrderStatus.failed:
+        return 'Failed';
+      case OrderStatus.cancelled:
+        return 'Cancelled';
+    }
+  }
+
+  Color _statusColor(OrderStatus s, tokens) {
+    switch (s) {
+      case OrderStatus.pending:
+        return tokens.warning;
+      case OrderStatus.paid:
+      case OrderStatus.confirmed:
+        return tokens.success;
+      case OrderStatus.driverAssigned:
+        return tokens.primary;
+      case OrderStatus.paymentFailed:
+      case OrderStatus.failed:
+      case OrderStatus.cancelled:
+        return tokens.danger;
+    }
+  }
+
   String _formatDate(DateTime d) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    return '${d.day} ${months[d.month - 1]}, ${d.year}';
+    return '${d.day}/${d.month}/${d.year}';
   }
 }

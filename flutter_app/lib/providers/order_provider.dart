@@ -6,21 +6,21 @@ import '../services/api_client.dart';
 
 final ordersListProvider = FutureProvider.family<PaginatedOrders, int>(
   (ref, page) async {
-    final apiClient = ref.watch(apiClientProvider);
+    final apiClient = ref.watch(authenticatedApiClientProvider);
     return apiClient.getOrders(page: page, pageSize: 20);
   },
 );
 
 final orderDetailProvider = FutureProvider.family<Order, String>(
   (ref, orderId) async {
-    final apiClient = ref.watch(apiClientProvider);
+    final apiClient = ref.watch(authenticatedApiClientProvider);
     return apiClient.getOrder(orderId);
   },
 );
 
 final orderHistoryProvider = FutureProvider.family<List<OrderStatusHistory>, String>(
   (ref, orderId) async {
-    final apiClient = ref.watch(apiClientProvider);
+    final apiClient = ref.watch(authenticatedApiClientProvider);
     return apiClient.getOrderHistory(orderId);
   },
 );
@@ -29,10 +29,32 @@ final orderNotificationsProvider =
     FutureProvider.family<List<OrderNotification>, (String, int)>(
   (ref, params) async {
     final (orderId, page) = params;
-    final apiClient = ref.watch(apiClientProvider);
+    final apiClient = ref.watch(authenticatedApiClientProvider);
     return apiClient.getOrderNotifications(orderId: orderId, page: page, pageSize: 50);
   },
 );
+
+// ==================== Admin ====================
+
+/// Admin order overview: paginated, filterable by status.
+/// Backend enforces admin role; 403 otherwise.
+final adminOrdersProvider =
+    FutureProvider.family<PaginatedOrders, ({int page, String? status})>(
+  (ref, params) async {
+    final apiClient = ref.watch(authenticatedApiClientProvider);
+    return apiClient.getAdminOrders(
+      page: params.page,
+      pageSize: 20,
+      status: params.status,
+    );
+  },
+);
+
+/// Admin summary: counts by status + outbox/retry/quarantine depths.
+final adminSummaryProvider = FutureProvider<AdminSummary>((ref) async {
+  final apiClient = ref.watch(authenticatedApiClientProvider);
+  return apiClient.getAdminSummary();
+});
 
 class CheckoutState {
   final String? orderId;
@@ -143,14 +165,14 @@ class CheckoutNotifier extends StateNotifier<CheckoutState> {
 
 final checkoutProvider =
     StateNotifierProvider<CheckoutNotifier, CheckoutState>((ref) {
-  final apiClient = ref.watch(apiClientProvider);
+  final apiClient = ref.watch(authenticatedApiClientProvider);
   return CheckoutNotifier(apiClient: apiClient);
 });
 
 // Auto-refresh order status
 final orderStatusRefreshProvider = StreamProvider.family<Order, String>(
   (ref, orderId) async* {
-    final apiClient = ref.watch(apiClientProvider);
+    final apiClient = ref.watch(authenticatedApiClientProvider);
 
     while (true) {
       try {

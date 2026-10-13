@@ -1,18 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../config/theme.dart';
+import '../config/food_images.dart';
 import '../models/restaurant.dart';
 import '../providers/restaurant_provider.dart';
+import '../providers/theme_provider.dart';
 import '../widgets/food_image.dart';
-import '../widgets/premium_widgets.dart';
+import '../widgets/qb_shell.dart';
+import '../widgets/qb_widgets.dart';
 
-/// Premium restaurant detail: rich header, menu list with food cards and
-/// inline quantity steppers, sticky cart bar.
+/// Restaurant detail + menu screen.
+///
+/// Hero image, honest metadata, menu grouped with food cards, quantity
+/// controls, and add-to-cart. Veg indicators are inferred from names since
+/// the backend provides no veg flag — shown as a best-effort hint.
 class RestaurantDetailScreen extends ConsumerStatefulWidget {
   final String restaurantId;
 
-  const RestaurantDetailScreen({super.key, required this.restaurantId});
+  const RestaurantDetailScreen(
+      {super.key, required this.restaurantId});
 
   @override
   ConsumerState<RestaurantDetailScreen> createState() =>
@@ -21,73 +27,110 @@ class RestaurantDetailScreen extends ConsumerStatefulWidget {
 
 class _RestaurantDetailScreenState
     extends ConsumerState<RestaurantDetailScreen> {
+  final _searchController = TextEditingController();
+  String _menuQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final menuAsync =
-        ref.watch(restaurantMenuProvider((widget.restaurantId, 1)));
+    final tokens = ref.watch(themeTokensProvider);
     final restaurantsAsync = ref.watch(restaurantsProvider(1));
-    final cart = ref.watch(cartProvider);
-
-    final restaurant = restaurantsAsync.maybeWhen(
-      data: (page) => page.items
-          .where((r) => r.id == widget.restaurantId)
-          .firstOrNull,
-      orElse: () => null,
-    );
+    final menuAsync = ref.watch(
+        restaurantMenuProvider((widget.restaurantId, 1)));
 
     return Scaffold(
-      body: menuAsync.when(
-        data: (menu) => _buildBody(context, menu, restaurant, cart),
-        loading: () => const Center(
-            child: CircularProgressIndicator()),
-        error: (err, _) => Center(
-          child: ErrorCard(
-            message: 'Couldn\'t load the menu.\n$err',
-            onRetry: () => ref.invalidate(
-                restaurantMenuProvider((widget.restaurantId, 1))),
+      body: restaurantsAsync.when(
+        data: (page) {
+          final restaurant = page.items
+              .where((r) => r.id == widget.restaurantId)
+              .firstOrNull;
+          if (restaurant == null) {
+            return SafeArea(
+              child: Column(
+                children: [
+                  _BackBar(tokens: tokens),
+                  Expanded(
+                    child: QbEmptyState(
+                      icon: Icons.restaurant_rounded,
+                      title: 'Restaurant not found',
+                      message:
+                          'This restaurant may have been removed.',
+                      actionLabel: 'Back to home',
+                      onAction: () => context.go('/'),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+          return _buildBody(context, tokens, restaurant, menuAsync);
+        },
+        loading: () =>
+            const SafeArea(child: QbLoading(message: 'Loading…')),
+        error: (e, _) => SafeArea(
+          child: Column(
+            children: [
+              _BackBar(tokens: tokens),
+              Expanded(
+                child: QbErrorState(
+                  message: 'Could not load restaurant details.',
+                  onRetry: () =>
+                      ref.invalidate(restaurantsProvider(1)),
+                ),
+              ),
+            ],
           ),
         ),
       ),
-      bottomNavigationBar: cart.items.isNotEmpty
-          ? _CartBar(
-              itemCount:
-                  cart.items.fold(0, (s, i) => s + i.quantity),
-              total: cart.totalPrice,
-              onTap: () => context.go('/cart'),
-            )
-          : null,
     );
   }
 
-  Widget _buildBody(BuildContext context, RestaurantMenu menu,
-      Restaurant? restaurant, CartState cart) {
+  Widget _buildBody(
+      BuildContext context,
+      tokens,
+      Restaurant restaurant,
+      AsyncValue<RestaurantMenu> menuAsync) {
     return CustomScrollView(
       slivers: [
-        // Collapsing header
+        // Hero
         SliverAppBar(
-          expandedHeight: 220,
+          expandedHeight: 240,
           pinned: true,
-          leading: Container(
-            margin: const EdgeInsets.all(8),
-            decoration: const BoxDecoration(
-              color: Colors.black38,
-              shape: BoxShape.circle,
-            ),
-            child: IconButton(
-              icon: const Icon(Icons.arrow_back_rounded,
-                  color: Colors.white),
-              onPressed: () => context.pop(),
+          leading: Padding(
+            padding: const EdgeInsets.all(8),
+            child: CircleAvatar(
+              backgroundColor:
+                  tokens.surface.withValues(alpha: 0.9),
+              child: IconButton(
+                icon: Icon(Icons.arrow_back_rounded,
+                    color: tokens.text),
+                onPressed: () => context.go('/'),
+              ),
             ),
           ),
+          actions: const [
+            Padding(
+              padding: EdgeInsets.only(right: 12),
+              child: QbCartButton(),
+            ),
+          ],
           flexibleSpace: FlexibleSpaceBar(
             background: Stack(
               fit: StackFit.expand,
               children: [
                 FoodImage(
+                  imageUrl: QuickBiteImages.forRestaurant(
+                    restaurantId: restaurant.id,
+                    restaurantName: restaurant.name,
+                    backendImageUrl: restaurant.imageUrl,
+                  ),
                   width: double.infinity,
-                  height: double.infinity,
                   borderRadius: BorderRadius.zero,
-                  fallbackIcon: Icons.restaurant_rounded,
                 ),
                 Container(
                   decoration: BoxDecoration(
@@ -95,196 +138,284 @@ class _RestaurantDetailScreenState
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                        Colors.black.withValues(alpha: 0.15),
-                        Colors.black.withValues(alpha: 0.72),
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.7),
                       ],
                     ),
-                  ),
-                ),
-                Positioned(
-                  left: AppTheme.spaceMd,
-                  right: AppTheme.spaceMd,
-                  bottom: AppTheme.spaceMd,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (restaurant != null)
-                        Row(
-                          children: [
-                            RatingBadge(
-                                rating: restaurant.rating,
-                                large: true),
-                            const SizedBox(width: AppTheme.spaceSm),
-                            Container(
-                              padding:
-                                  const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 5),
-                              decoration: BoxDecoration(
-                                color: Colors.white
-                                    .withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(
-                                    AppTheme.radiusXs),
-                              ),
-                              child: Text(
-                                restaurant.cuisine,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      const SizedBox(height: AppTheme.spaceXs),
-                      Text(
-                        restaurant?.name ?? 'Restaurant',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      if (restaurant != null)
-                        Text(
-                          '${restaurant.deliveryTimeMinutes} min delivery • ${restaurant.deliveryFeeMinor == 0 ? 'Free delivery' : restaurant.deliveryFee}',
-                          style: TextStyle(
-                            color: Colors.white
-                                .withValues(alpha: 0.85),
-                            fontSize: 13,
-                          ),
-                        ),
-                    ],
                   ),
                 ),
               ],
             ),
           ),
         ),
-        // Menu items
-        SliverPadding(
-          padding: const EdgeInsets.all(AppTheme.spaceMd),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, i) {
-                final item = menu.items[i];
-                final inCart = cart.items
-                    .where((c) => c.menuItem.id == item.id)
-                    .firstOrNull;
-                return Padding(
-                  padding: const EdgeInsets.only(
-                      bottom: AppTheme.spaceSm),
-                  child: _MenuCard(
-                    item: item,
-                    quantity: inCart?.quantity ?? 0,
-                    onAdd: () => ref
-                        .read(cartProvider.notifier)
-                        .addItem(item, widget.restaurantId),
-                    onIncrement: () => ref
-                        .read(cartProvider.notifier)
-                        .updateQuantity(item.id,
-                            (inCart?.quantity ?? 0) + 1),
-                    onDecrement: () => ref
-                        .read(cartProvider.notifier)
-                        .updateQuantity(item.id,
-                            (inCart?.quantity ?? 1) - 1),
+        // Info
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(restaurant.name,
+                    style: Theme.of(context)
+                        .textTheme
+                        .displayMedium
+                        ?.copyWith(fontSize: 26)),
+                const SizedBox(height: 6),
+                Text(restaurant.description,
+                    style:
+                        Theme.of(context).textTheme.bodyMedium),
+                const SizedBox(height: 12),
+                // Honest metadata row — only real data.
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (restaurant.hasRating)
+                      _MetaChip(
+                        icon: Icons.star_rounded,
+                        label: restaurant.rating
+                            .toStringAsFixed(1),
+                        color: tokens.success,
+                      ),
+                    if (restaurant.hasDeliveryEstimate)
+                      _MetaChip(
+                        icon: Icons.delivery_dining_outlined,
+                        label:
+                            '${restaurant.deliveryTimeMinutes} min',
+                      ),
+                    if (restaurant.cuisine.isNotEmpty)
+                      _MetaChip(
+                        icon: Icons.restaurant_menu_rounded,
+                        label: restaurant.cuisine,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                // Menu search
+                TextField(
+                  controller: _searchController,
+                  onChanged: (v) => setState(() =>
+                      _menuQuery = v.trim().toLowerCase()),
+                  decoration: const InputDecoration(
+                    hintText: 'Search menu…',
+                    prefixIcon:
+                        Icon(Icons.search_rounded),
+                    isDense: true,
                   ),
-                );
-              },
-              childCount: menu.items.length,
+                ),
+              ],
             ),
           ),
         ),
+        // Menu
+        menuAsync.when(
+          data: (menu) => _buildMenu(context, menu),
+          loading: () => const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: QbLoading(message: 'Loading menu…'),
+            ),
+          ),
+          error: (e, _) => SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: QbErrorState(
+                message: 'Could not load the menu.',
+                onRetry: () => ref.invalidate(
+                    restaurantMenuProvider(
+                        (widget.restaurantId, 1))),
+              ),
+            ),
+          ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 32)),
       ],
+    );
+  }
+
+  Widget _buildMenu(BuildContext context, RestaurantMenu menu) {
+    final items = menu.items.where((item) {
+      if (_menuQuery.isEmpty) return true;
+      return item.name.toLowerCase().contains(_menuQuery) ||
+          item.description
+              .toLowerCase()
+              .contains(_menuQuery);
+    }).toList();
+
+    if (items.isEmpty) {
+      return SliverToBoxAdapter(
+        child: QbEmptyState(
+          icon: Icons.fastfood_outlined,
+          title: 'No dishes found',
+          message: _menuQuery.isEmpty
+              ? 'This restaurant has no menu items right now.'
+              : 'Try a different search term.',
+        ),
+      );
+    }
+
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      sliver: SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, i) => _MenuItemCard(
+              item: items[i],
+              restaurantId: widget.restaurantId),
+          childCount: items.length,
+        ),
+      ),
     );
   }
 }
 
-class _MenuCard extends StatelessWidget {
-  final MenuItem item;
-  final int quantity;
-  final VoidCallback onAdd;
-  final VoidCallback onIncrement;
-  final VoidCallback onDecrement;
-
-  const _MenuCard({
-    required this.item,
-    required this.quantity,
-    required this.onAdd,
-    required this.onIncrement,
-    required this.onDecrement,
-  });
+class _BackBar extends StatelessWidget {
+  final tokens;
+  const _BackBar({required this.tokens});
 
   @override
   Widget build(BuildContext context) {
-    final dimmed = !item.available;
-    return Opacity(
-      opacity: dimmed ? 0.55 : 1.0,
-      child: Container(
-        padding: const EdgeInsets.all(AppTheme.spaceSm),
-        decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          borderRadius:
-              BorderRadius.circular(AppTheme.radiusMd),
-          boxShadow: AppTheme.cardShadow(context),
-        ),
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () => context.go('/'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetaChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color? color;
+
+  const _MetaChip(
+      {required this.icon, required this.label, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding:
+          const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardTheme.color,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+            color: Theme.of(context).dividerColor),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon,
+              size: 16,
+              color: color ??
+                  Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.color),
+          const SizedBox(width: 6),
+          Text(label,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Menu item card with image, veg hint, price, and add/stepper.
+class _MenuItemCard extends ConsumerWidget {
+  final MenuItem item;
+  final String restaurantId;
+
+  const _MenuItemCard(
+      {required this.item, required this.restaurantId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cart = ref.watch(cartProvider);
+    final cartItem = cart.items
+        .where((c) => c.menuItem.id == item.id)
+        .firstOrNull;
+    final qty = cartItem?.quantity ?? 0;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: QbCard(
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Image
             FoodImage(
-              width: 84,
-              height: 84,
-              imageUrl: item.image,
-              fallbackIcon: Icons.fastfood_rounded,
+              imageUrl: QuickBiteImages.forMenuItem(
+                itemName: item.name,
+                backendImageUrl: item.image,
+              ),
+              width: 96,
+              height: 96,
             ),
-            const SizedBox(width: AppTheme.spaceMd),
+            const SizedBox(width: 14),
+            // Info
             Expanded(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
                 children: [
-                  Text(item.name,
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 2),
-                  Text(
-                    item.description,
-                    style:
-                        Theme.of(context).textTheme.bodySmall,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: AppTheme.spaceSm),
                   Row(
                     children: [
-                      Text(
-                        item.price,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleLarge
-                            ?.copyWith(color: AppTheme.primary),
+                      VegBadge(isVeg: inferVeg(item.name)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(item.name,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium,
+                            maxLines: 2,
+                            overflow:
+                                TextOverflow.ellipsis),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(item.description,
+                      style:
+                          Theme.of(context).textTheme.bodySmall,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Text(formatInr(item.priceMinor),
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(
+                                  fontWeight:
+                                      FontWeight.w800)),
                       const Spacer(),
-                      if (!item.available)
-                        const Text(
-                          'Unavailable',
-                          style: TextStyle(
-                            color: AppTheme.danger,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        )
-                      else if (quantity == 0)
-                        _AddButton(onTap: onAdd)
+                      if (qty == 0)
+                        _AddButton(
+                            onPressed: () => ref
+                                .read(cartProvider.notifier)
+                                .addItem(
+                                    item, restaurantId))
                       else
-                        QuantityStepper(
-                          quantity: quantity,
-                          onIncrement: onIncrement,
-                          onDecrement: onDecrement,
-                          compact: true,
+                        QbStepper(
+                          quantity: qty,
+                          onAdd: () => ref
+                              .read(cartProvider.notifier)
+                              .updateQuantity(
+                                  item.id, qty + 1),
+                          onRemove: () => ref
+                              .read(cartProvider.notifier)
+                              .updateQuantity(
+                                  item.id, qty - 1),
                         ),
                     ],
                   ),
@@ -298,111 +429,25 @@ class _MenuCard extends StatelessWidget {
   }
 }
 
-class _AddButton extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _AddButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppTheme.primary,
-      borderRadius: BorderRadius.circular(AppTheme.radiusXs),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppTheme.radiusXs),
-        onTap: onTap,
-        child: const Padding(
-          padding:
-              EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-          child: Text(
-            'ADD',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 13,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CartBar extends StatelessWidget {
-  final int itemCount;
-  final String total;
-  final VoidCallback onTap;
-
-  const _CartBar({
-    required this.itemCount,
-    required this.total,
-    required this.onTap,
-  });
+class _AddButton extends ConsumerWidget {
+  final VoidCallback onPressed;
+  const _AddButton({required this.onPressed});
 
   @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-            AppTheme.spaceMd, AppTheme.spaceSm,
-            AppTheme.spaceMd, AppTheme.spaceMd),
-        child: Material(
-          borderRadius:
-              BorderRadius.circular(AppTheme.radiusMd),
-          child: InkWell(
-            borderRadius:
-                BorderRadius.circular(AppTheme.radiusMd),
-            onTap: onTap,
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppTheme.spaceMd,
-                  vertical: 14),
-              decoration: BoxDecoration(
-                gradient: AppTheme.brandGradient,
-                borderRadius:
-                    BorderRadius.circular(AppTheme.radiusMd),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primary
-                        .withValues(alpha: 0.35),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Text(
-                    '$itemCount item${itemCount == 1 ? '' : 's'}',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(width: AppTheme.spaceSm),
-                  Text(
-                    total,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 17,
-                    ),
-                  ),
-                  const Spacer(),
-                  const Text(
-                    'View cart',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700),
-                  ),
-                  const Icon(Icons.arrow_forward_rounded,
-                      color: Colors.white, size: 18),
-                ],
-              ),
-            ),
-          ),
-        ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(themeTokensProvider);
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: tokens.primary,
+        side: BorderSide(color: tokens.primary),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10)),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       ),
+      child: const Text('ADD',
+          style: TextStyle(fontWeight: FontWeight.w800)),
     );
   }
 }

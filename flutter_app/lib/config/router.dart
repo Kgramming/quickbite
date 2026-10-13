@@ -11,7 +11,10 @@ import '../screens/order_confirmation_screen.dart';
 import '../screens/order_tracking_screen.dart';
 import '../screens/order_history_screen.dart';
 import '../screens/profile_screen.dart';
+import '../screens/admin_screen.dart';
+import '../widgets/qb_shell.dart';
 import '../providers/auth_provider.dart';
+import '../models/user.dart';
 
 /// Notifies GoRouter when auth state changes WITHOUT recreating the router.
 ///
@@ -56,6 +59,15 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         return '/';
       }
 
+      // Admin route protection: non-admins are sent home.
+      // The backend also enforces this (require_admin -> 403).
+      if (!isLoading &&
+          isLoggedIn &&
+          state.fullPath == '/admin' &&
+          authState.user?.role != UserRole.admin) {
+        return '/';
+      }
+
       return null;
     },
     routes: [
@@ -69,56 +81,66 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         name: 'login',
         builder: (context, state) => const LoginScreen(),
       ),
-      GoRoute(
-        path: '/',
-        name: 'home',
-        builder: (context, state) => const HomeScreen(),
+      // Tab screens wrapped in the responsive shell (sidebar / bottom nav).
+      ShellRoute(
+        builder: (context, state, child) =>
+            QbShell(location: state.uri.toString(), child: child),
         routes: [
           GoRoute(
-            path: 'restaurant/:id',
-            name: 'restaurant-detail',
-            builder: (context, state) {
-              final restaurantId = state.pathParameters['id']!;
-              return RestaurantDetailScreen(restaurantId: restaurantId);
-            },
+            path: '/',
+            name: 'home',
+            builder: (context, state) => const HomeScreen(),
           ),
           GoRoute(
-            path: 'cart',
-            name: 'cart',
-            builder: (context, state) => const CartScreen(),
-          ),
-          GoRoute(
-            path: 'checkout',
-            name: 'checkout',
-            builder: (context, state) => const CheckoutScreen(),
-          ),
-          GoRoute(
-            path: 'order/:id/confirmation',
-            name: 'order-confirmation',
-            builder: (context, state) {
-              final orderId = state.pathParameters['id']!;
-              return OrderConfirmationScreen(orderId: orderId);
-            },
-          ),
-          GoRoute(
-            path: 'order/:id/tracking',
-            name: 'order-tracking',
-            builder: (context, state) {
-              final orderId = state.pathParameters['id']!;
-              return OrderTrackingScreen(orderId: orderId);
-            },
-          ),
-          GoRoute(
-            path: 'orders',
+            path: '/orders',
             name: 'order-history',
             builder: (context, state) => const OrderHistoryScreen(),
           ),
           GoRoute(
-            path: 'profile',
+            path: '/profile',
             name: 'profile',
             builder: (context, state) => const ProfileScreen(),
           ),
         ],
+      ),
+      GoRoute(
+        path: '/restaurant/:id',
+        name: 'restaurant-detail',
+        builder: (context, state) {
+          final restaurantId = state.pathParameters['id']!;
+          return RestaurantDetailScreen(restaurantId: restaurantId);
+        },
+      ),
+      GoRoute(
+        path: '/cart',
+        name: 'cart',
+        builder: (context, state) => const CartScreen(),
+      ),
+      GoRoute(
+        path: '/checkout',
+        name: 'checkout',
+        builder: (context, state) => const CheckoutScreen(),
+      ),
+      GoRoute(
+        path: '/order/:id/confirmation',
+        name: 'order-confirmation',
+        builder: (context, state) {
+          final orderId = state.pathParameters['id']!;
+          return OrderConfirmationScreen(orderId: orderId);
+        },
+      ),
+      GoRoute(
+        path: '/order/:id/tracking',
+        name: 'order-tracking',
+        builder: (context, state) {
+          final orderId = state.pathParameters['id']!;
+          return OrderTrackingScreen(orderId: orderId);
+        },
+      ),
+      GoRoute(
+        path: '/admin',
+        name: 'admin',
+        builder: (context, state) => const AdminScreen(),
       ),
     ],
   );

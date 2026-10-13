@@ -315,3 +315,38 @@ class OrderStatusHistory extends Equatable {
   @override
   List<Object?> get props => [status, changedAt, message];
 }
+
+/// Admin overview summary from GET /api/v1/admin/summary.
+///
+/// All fields come straight from the backend — no invented values.
+class AdminSummary extends Equatable {
+  /// Order counts keyed by status string (e.g. "PENDING" -> 12).
+  final Map<String, int> byStatus;
+  final int outboxPending;
+  final int retryPending;
+  final int quarantineCount;
+
+  const AdminSummary({
+    required this.byStatus,
+    required this.outboxPending,
+    required this.retryPending,
+    required this.quarantineCount,
+  });
+
+  factory AdminSummary.fromJson(Map<String, dynamic> json) {
+    final raw = json['by_status'] as Map<String, dynamic>? ?? {};
+    return AdminSummary(
+      byStatus: raw.map((k, v) => MapEntry(k, (v as num).toInt())),
+      outboxPending: (json['outbox_pending'] as num?)?.toInt() ?? 0,
+      retryPending: (json['retry_pending'] as num?)?.toInt() ?? 0,
+      quarantineCount: (json['quarantine_count'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  /// Total orders across all known statuses.
+  int get totalOrders => byStatus.values.fold(0, (a, b) => a + b);
+
+  @override
+  List<Object?> get props =>
+      [byStatus, outboxPending, retryPending, quarantineCount];
+}

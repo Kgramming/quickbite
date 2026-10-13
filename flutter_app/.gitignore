@@ -91,7 +91,6 @@ app.*.map.json
 **/android/app/src/main/java/com/example/app/GeneratedPluginRegistrant.java
 
 # Web
-lib/generated_plugin_registrant.dart
 
 # Symbolication related
 app.*.symbols

@@ -1,17 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../config/theme.dart';
+import '../config/food_images.dart';
 import '../providers/restaurant_provider.dart';
+import '../providers/theme_provider.dart';
 import '../widgets/food_image.dart';
-import '../widgets/premium_widgets.dart';
+import '../widgets/qb_widgets.dart';
 
-/// Premium cart: editable quantities, swipe-to-remove, price breakdown.
+/// Cart screen: editable quantities, honest price breakdown in INR.
+///
+/// Pricing comes from the cart state (menu `priceMinor` values). Delivery
+/// fee and taxes are shown only when the backend provides them — never
+/// invented.
 class CartScreen extends ConsumerWidget {
   const CartScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(themeTokensProvider);
     final cart = ref.watch(cartProvider);
     final notifier = ref.read(cartProvider.notifier);
 
@@ -31,7 +37,7 @@ class CartScreen extends ConsumerWidget {
         ],
       ),
       body: cart.items.isEmpty
-          ? EmptyState(
+          ? QbEmptyState(
               icon: Icons.shopping_bag_outlined,
               title: 'Your cart is empty',
               message:
@@ -39,177 +45,193 @@ class CartScreen extends ConsumerWidget {
               actionLabel: 'Browse restaurants',
               onAction: () => context.go('/'),
             )
-          : Column(
-              children: [
-                Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(AppTheme.spaceMd),
-                    itemCount: cart.items.length,
-                    separatorBuilder: (_, __) =>
-                        const SizedBox(height: AppTheme.spaceSm),
-                    itemBuilder: (context, i) {
-                      final item = cart.items[i];
-                      return Dismissible(
-                        key: ValueKey(item.menuItem.id),
-                        direction: DismissDirection.endToStart,
-                        background: Container(
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 20),
-                          decoration: BoxDecoration(
-                            color: AppTheme.danger,
-                            borderRadius: BorderRadius.circular(
-                                AppTheme.radiusMd),
-                          ),
-                          child: const Icon(Icons.delete_outline_rounded,
-                              color: Colors.white),
-                        ),
-                        onDismissed: (_) =>
-                            notifier.removeItem(item.menuItem.id),
-                        child: Container(
-                          padding:
-                              const EdgeInsets.all(AppTheme.spaceSm),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).cardColor,
-                            borderRadius: BorderRadius.circular(
-                                AppTheme.radiusMd),
-                            boxShadow:
-                                AppTheme.cardShadow(context),
-                          ),
-                          child: Row(
-                            children: [
-                              FoodImage(
-                                width: 64,
-                                height: 64,
-                                imageUrl: item.menuItem.image,
-                                borderRadius: BorderRadius.circular(
-                                    AppTheme.radiusSm),
-                                fallbackIcon:
-                                    Icons.fastfood_rounded,
-                              ),
-                              const SizedBox(
-                                  width: AppTheme.spaceMd),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      item.menuItem.name,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium,
-                                      maxLines: 1,
-                                      overflow:
-                                          TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      item.menuItem.price,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: AppTheme.primary,
-                                            fontWeight:
-                                                FontWeight.w700,
+          : Center(
+              child: ConstrainedBox(
+                constraints:
+                    const BoxConstraints(maxWidth: 720),
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: ListView.separated(
+                        padding: const EdgeInsets.all(20),
+                        itemCount: cart.items.length,
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(height: 12),
+                        itemBuilder: (context, i) {
+                          final item = cart.items[i];
+                          return QbCard(
+                            child: Row(
+                              children: [
+                                FoodImage(
+                                  imageUrl:
+                                      QuickBiteImages.forMenuItem(
+                                    itemName:
+                                        item.menuItem.name,
+                                    backendImageUrl:
+                                        item.menuItem.image,
+                                  ),
+                                  width: 72,
+                                  height: 72,
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment
+                                            .start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          VegBadge(
+                                              isVeg: inferVeg(item
+                                                  .menuItem
+                                                  .name)),
+                                          const SizedBox(
+                                              width: 6),
+                                          Expanded(
+                                            child: Text(
+                                                item.menuItem
+                                                    .name,
+                                                style: Theme.of(
+                                                        context)
+                                                    .textTheme
+                                                    .titleMedium,
+                                                maxLines: 2,
+                                                overflow:
+                                                    TextOverflow
+                                                        .ellipsis),
                                           ),
-                                    ),
-                                  ],
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                          formatInr(item.menuItem
+                                              .priceMinor),
+                                          style: Theme.of(
+                                                  context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                  fontWeight:
+                                                      FontWeight
+                                                          .w700)),
+                                    ],
+                                  ),
                                 ),
+                                QbStepper(
+                                  quantity: item.quantity,
+                                  onAdd: () =>
+                                      notifier.updateQuantity(
+                                          item.menuItem.id,
+                                          item.quantity + 1),
+                                  onRemove: () =>
+                                      notifier.updateQuantity(
+                                          item.menuItem.id,
+                                          item.quantity - 1),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    // Bill summary
+                    Container(
+                      decoration: BoxDecoration(
+                        color: tokens.surface,
+                        border: Border(
+                            top: BorderSide(
+                                color: tokens.border)),
+                      ),
+                      child: SafeArea(
+                        child: Padding(
+                          padding:
+                              const EdgeInsets.all(20),
+                          child: Column(
+                            children: [
+                              _BillRow(
+                                  label: 'Subtotal',
+                                  value: formatInr(
+                                      cart.totalAmount)),
+                              const SizedBox(height: 6),
+                              _BillRow(
+                                label: 'Delivery fee',
+                                // Backend does not provide a per-order
+                                // delivery fee; show as calculated at
+                                // checkout, not here.
+                                value:
+                                    'Calculated at checkout',
+                                isMuted: true,
                               ),
-                              QuantityStepper(
-                                quantity: item.quantity,
-                                onIncrement: () =>
-                                    notifier.updateQuantity(
-                                  item.menuItem.id,
-                                  item.quantity + 1,
-                                ),
-                                onDecrement: () =>
-                                    notifier.updateQuantity(
-                                  item.menuItem.id,
-                                  item.quantity - 1,
-                                ),
-                                compact: true,
+                              const Divider(height: 20),
+                              _BillRow(
+                                label: 'To pay',
+                                value: formatInr(
+                                    cart.totalAmount),
+                                isTotal: true,
+                              ),
+                              const SizedBox(height: 16),
+                              QbPrimaryButton(
+                                label:
+                                    'Proceed to checkout',
+                                icon: Icons
+                                    .arrow_forward_rounded,
+                                onPressed: () =>
+                                    context.go('/checkout'),
                               ),
                             ],
                           ),
                         ),
-                      );
-                    },
-                  ),
-                ),
-                // Price breakdown
-                Container(
-                  padding: const EdgeInsets.all(AppTheme.spaceMd),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).cardColor,
-                    borderRadius:
-                        const BorderRadius.vertical(
-                      top: Radius.circular(AppTheme.radiusLg),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.08),
-                        blurRadius: 16,
-                        offset: const Offset(0, -4),
                       ),
-                    ],
-                  ),
-                  child: SafeArea(
-                    top: false,
-                    child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.stretch,
-                      children: [
-                        _priceRow(context, 'Subtotal',
-                            cart.totalPrice, false),
-                        const SizedBox(height: 4),
-                        _priceRow(
-                            context,
-                            'Delivery',
-                            'Calculated at checkout',
-                            false,
-                            muted: true),
-                        const Divider(height: 20),
-                        _priceRow(context, 'Total',
-                            cart.totalPrice, true),
-                        const SizedBox(height: AppTheme.spaceMd),
-                        PremiumButton(
-                          label: 'Proceed to checkout',
-                          icon: Icons
-                              .arrow_forward_rounded,
-                          onPressed: () =>
-                              context.go('/checkout'),
-                        ),
-                      ],
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
     );
   }
+}
 
-  Widget _priceRow(BuildContext context, String label, String value,
-      bool isTotal, {bool muted = false}) {
+class _BillRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool isTotal;
+  final bool isMuted;
+
+  const _BillRow({
+    required this.label,
+    required this.value,
+    this.isTotal = false,
+    this.isMuted = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     final style = isTotal
         ? Theme.of(context)
             .textTheme
             .titleLarge
-            ?.copyWith(color: AppTheme.primary)
-        : Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: muted
-                  ? Theme.of(context).textTheme.bodySmall?.color
-                  : null,
-            );
+            ?.copyWith(fontWeight: FontWeight.w800)
+        : Theme.of(context).textTheme.bodyMedium;
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: style),
-        Text(value,
-            style: isTotal
-                ? style
-                : Theme.of(context).textTheme.titleMedium),
+        Text(label,
+            style: isMuted
+                ? Theme.of(context).textTheme.bodySmall
+                : style),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(value,
+              textAlign: TextAlign.end,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: isMuted
+                  ? Theme.of(context).textTheme.bodySmall
+                  : style?.copyWith(
+                      fontWeight: isTotal
+                          ? FontWeight.w800
+                          : FontWeight.w600)),
+        ),
       ],
     );
   }
