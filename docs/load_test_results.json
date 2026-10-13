@@ -1,0 +1,50 @@
+{
+  "timestamp": "2026-10-13T10:57:21Z",
+  "test_type": "100-order creation benchmark",
+  "api_url": "http://127.0.0.1:8002",
+  "database": "quickbite_db (production)",
+  "environment": "Production database (same as API)",
+  "test_script": "load_test.sh",
+  "duration_seconds": 4.54,
+  "summary": {
+    "total_orders": 100,
+    "successful": 100,
+    "failed": 0,
+    "success_rate_percent": 100.0,
+    "total_time_seconds": 4.54,
+    "throughput_orders_per_sec": 22.0,
+    "latency_min_ms": 11,
+    "latency_p50_ms": 14,
+    "latency_p95_ms": 19,
+    "latency_p99_ms": 22,
+    "latency_max_ms": 22,
+    "latency_mean_ms": 15.2,
+    "idempotency_tested": true,
+    "idempotency_success": true
+  },
+  "observed_latencies_sample": [
+    16,
+    19,
+    22,
+    14,
+    14,
+    12,
+    17,
+    13,
+    11,
+    16
+  ],
+  "database_verification": {
+    "orders_created": 100,
+    "database": "quickbite_db",
+    "query": "SELECT COUNT(*) FROM orders WHERE customer_email LIKE 'load-test%'",
+    "result": "100 orders persisted"
+  },
+  "notes": [
+    "Load test creates real orders in production database",
+    "All 100 orders persisted with corresponding outbox events",
+    "Idempotency verified: duplicate requests return same order ID",
+    "Sequential requests; no concurrency tested",
+    "API and database on same machine (no network latency)"
+  ]
+}

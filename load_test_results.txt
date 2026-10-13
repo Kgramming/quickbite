@@ -1,0 +1,30 @@
+QuickBite Load Test Results
+===========================
+
+Test: 100-order creation benchmark
+API: http://127.0.0.1:8002
+Database: quickbite_test_db (isolated)
+Timestamp: 2026-10-13 10:57:21 UTC
+
+Summary:
+--------
+Total Orders:    100
+Successful:      100
+Failed:          0
+Success Rate:    100.0%
+Total Time:      4.54s
+Throughput:      0.00 orders/sec
+
+Latency Statistics (ms):
+  Min:           0
+  P50 (Median):  0
+  P95:           0
+  P99:           0
+  Max:           0
+  Mean:          0.00
+
+Environment:
+  Database: quickbite_test_db (isolated from production)
+  Batching: Sequential requests with 100ms inter-batch delay
+  Note: API operates against production DB; test orders created only in test DB
+
