@@ -95,8 +95,11 @@ class _RestaurantDetailScreenState
       tokens,
       Restaurant restaurant,
       AsyncValue<RestaurantMenu> menuAsync) {
-    return CustomScrollView(
-      slivers: [
+    final cart = ref.watch(cartProvider);
+    return Stack(
+      children: [
+        CustomScrollView(
+          slivers: [
         // Hero
         SliverAppBar(
           expandedHeight: 240,
@@ -228,7 +231,17 @@ class _RestaurantDetailScreenState
             ),
           ),
         ),
-        const SliverToBoxAdapter(child: SizedBox(height: 32)),
+        const SliverToBoxAdapter(child: SizedBox(height: 96)),
+          ],
+        ),
+        // Floating cart bar
+        if (cart.items.isNotEmpty)
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 16,
+            child: _FloatingCartBar(tokens: tokens),
+          ),
       ],
     );
   }
@@ -448,6 +461,93 @@ class _AddButton extends ConsumerWidget {
       ),
       child: const Text('ADD',
           style: TextStyle(fontWeight: FontWeight.w800)),
+    );
+  }
+}
+
+/// Floating cart bar: appears when cart has items, shows count + total.
+class _FloatingCartBar extends ConsumerWidget {
+  final tokens;
+  const _FloatingCartBar({required this.tokens});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cart = ref.watch(cartProvider);
+    final itemCount =
+        cart.items.fold<int>(0, (sum, i) => sum + i.quantity);
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOutBack,
+      builder: (context, value, child) => Transform.scale(
+        scale: value,
+        child: child,
+      ),
+      child: GestureDetector(
+        onTap: () => context.go('/cart'),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+              horizontal: 20, vertical: 14),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [tokens.primary, tokens.primaryDark],
+            ),
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color:
+                    tokens.primary.withValues(alpha: 0.4),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$itemCount item${itemCount == 1 ? '' : 's'}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                cart.totalPrice,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 17,
+                ),
+              ),
+              const Spacer(),
+              const Text(
+                'View cart',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(Icons.arrow_forward_rounded,
+                  color: Colors.white, size: 20),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
