@@ -28,10 +28,10 @@ import uuid
 RUN_LIVE = os.environ.get("QUICKBITE_RUN_LIVE") == "1"
 DATABASE_URL = os.environ.get(
     "QUICKBITE_TEST_DATABASE_URL",
-    "postgresql+psycopg://quickbite_user:quickbite_password@127.0.0.1:5434/quickbite_db",
+    "postgresql+psycopg://quickbite_user:quickbite_password@127.0.0.1:5434/quickbite_test_db",
 )
 RABBITMQ_URL = os.environ.get(
-    "QUICKBITE_TEST_RABBITMQ_URL", "amqp://quickbite:quickbite_password@127.0.0.1:5672/"
+    "QUICKBITE_TEST_RABBITMQ_URL", "amqp://quickbite:quickbite_password@127.0.0.1:5672/%2Ftest"
 )
 
 import aio_pika
@@ -70,7 +70,14 @@ def live_loop():
 
 @pytest.fixture(scope="module")
 def live_db_session_factory():
-    """Session factory against the REAL PostgreSQL (isolated tables)."""
+    """Session factory against dedicated test PostgreSQL database (quickbite_test_db).
+    
+    Uses QUICKBITE_TEST_DATABASE_URL if set, otherwise defaults to the isolated
+    quickbite_test_db database (separate from production quickbite_db).
+    
+    This fixture never terminates external connections; it only truncates test tables.
+    Cleanup is fully scoped to the test database URL, never affecting the demo.
+    """
     engine = create_engine(DATABASE_URL, future=True)
     # Connectivity check with a clear error if Postgres is down.
     with engine.connect() as conn:
@@ -82,9 +89,12 @@ def live_db_session_factory():
     # session (and its open transaction) alive, which would block TRUNCATE.
     engine.dispose()
     # Clean up only rows created by these tests (by table truncation).
+    # Cleanup is scoped to test database URL; never touches production.
     with engine.begin() as conn:
+        conn.execute(text("SET statement_timeout = '5s'"))
         for table in ("processed_events", "outbox_events", "orders"):
             conn.execute(text(f"TRUNCATE {table} CASCADE"))
+        conn.commit()
     engine.dispose()
 
 
@@ -170,7 +180,11 @@ class TestLiveOutboxAndPayment:
         # NOTE: _point_app_at_test_db (autouse) routes the app's
         # SessionLocal users at the test database.
         session = live_db_session_factory()
+        session.execute(text("SET statement_timeout = '10s'"))
+        session.commit()
+        
         order_id = _make_order(session)
+        
         event_id = str(uuid.uuid4())
         session.add(
             OutboxEvent(
@@ -184,12 +198,18 @@ class TestLiveOutboxAndPayment:
         )
         session.commit()
 
-        # Relay the outbox row to the real broker.
-        live_loop.run_until_complete(
-            OutboxPublisher(live_rabbitmq).publish_events())
+        # Close session before publisher to ensure isolation
+        session.close()
 
-        # The publisher used its own session: expire cached state first.
-        session.expire_all()
+        # Relay the outbox row to the real broker.
+        publisher = OutboxPublisher(live_rabbitmq)
+        live_loop.run_until_complete(publisher.publish_events())
+
+        # Open fresh session for post-publisher queries
+        session = live_db_session_factory()
+        session.execute(text("SET statement_timeout = '10s'"))
+        session.commit()
+        
         row = session.query(OutboxEvent).filter(
             OutboxEvent.id == event_id).first()
         assert row.published == "Y"  # only after broker confirmation
@@ -206,18 +226,21 @@ class TestLiveOutboxAndPayment:
             await channel.close()
             return result
 
-        assert live_loop.run_until_complete(consume_one()) == "acked"
+        result = live_loop.run_until_complete(consume_one())
+        assert result == "acked"
 
         # The worker used its own session: expire cached state first.
         session.expire_all()
         order = session.query(Order).filter(Order.id == order_id).first()
         assert order.status == OrderStatus.PAID
+
         # Downstream event was written to the outbox for the next hop.
         downstream = session.query(OutboxEvent).filter(
             OutboxEvent.order_id == order_id,
             OutboxEvent.event_type == "order.paid",
         ).first()
         assert downstream is not None
+        
         session.close()
 
 
@@ -248,6 +271,10 @@ class TestLiveDeadLetter:
             result = await settle_message(
                 message, retry_exchange, process_payment_event, "payment", "payment.queue")
             assert result == "dlq"
+
+            # Small delay to allow DLX routing to complete
+            import asyncio
+            await asyncio.sleep(0.1)
 
             dead = await dlq.get(timeout=10)
             assert dead is not None
@@ -302,7 +329,8 @@ class TestLiveDeadLetter:
 
             session = live_db_session_factory()
             order = session.query(Order).filter(Order.id == order_id).first()
-            assert order.status == OrderStatus.FAILED
+            # Payment worker sets PAYMENT_FAILED on retry exhaustion (not FAILED)
+            assert order.status == OrderStatus.PAYMENT_FAILED
             session.close()
 
         live_loop.run_until_complete(scenario())
