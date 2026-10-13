@@ -152,7 +152,7 @@ class Order extends Equatable {
         .toList();
 
     return Order(
-      id: json['id'] as String? ?? '',
+      id: json['id'] as String? ?? json['order_id'] as String? ?? '',
       restaurantId: json['restaurant_id'] as String? ?? '',
       status: _parseOrderStatus(json['status'] as String?),
       currency: json['currency'] as String? ?? 'INR',

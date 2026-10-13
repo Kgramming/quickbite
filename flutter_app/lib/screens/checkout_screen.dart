@@ -37,10 +37,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     // Redirect to confirmation on success (once).
     ref.listen(checkoutProvider, (_, next) {
-      if (next.orderId != null && !_submitted) {
+      final orderId = next.orderId;
+      if (orderId != null && orderId.isNotEmpty && !_submitted) {
         _submitted = true;
         ref.read(cartProvider.notifier).clearCart();
-        context.go('/order/${next.orderId}/confirmation');
+        context.go('/order/$orderId/confirmation');
       }
     });
 
