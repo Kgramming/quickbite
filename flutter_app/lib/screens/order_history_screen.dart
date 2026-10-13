@@ -6,6 +6,7 @@ import '../models/order.dart';
 import '../providers/order_provider.dart';
 import '../widgets/order_widgets.dart';
 import '../widgets/premium_widgets.dart';
+import '../widgets/food_image.dart';
 
 /// Premium order history: rich order cards with status pills.
 class OrderHistoryScreen extends ConsumerWidget {

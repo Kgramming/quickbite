@@ -51,7 +51,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(gradient: AppTheme.brandGradient),
+        decoration: BoxDecoration(gradient: AppTheme.brandGradient),
         child: SafeArea(
           child: Center(
             child: FadeTransition(
