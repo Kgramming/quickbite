@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     jwt_expire_hours: int = 24
 
     # CORS — explicit origins (no wildcard with credentials)
-    cors_origins: str = "http://localhost:3000,http://localhost:8080,http://localhost:5173"
+    cors_origins: str = "http://localhost:3000,http://localhost:8080,http://localhost:8091,http://localhost:5173"
 
     class Config:
         env_file = ".env"

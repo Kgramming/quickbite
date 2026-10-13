@@ -112,18 +112,42 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   String _extractErrorMessage(dynamic error) {
     if (error is DioException) {
+      // No response at all: backend unreachable, CORS blocked, or offline.
+      // Never expose raw transport details to the user.
+      if (error.response == null) {
+        return 'Unable to reach the server. Please check your connection and try again.';
+      }
+      final status = error.response?.statusCode;
+      // Invalid credentials.
+      if (status == 401 || status == 422) {
+        final data = error.response?.data;
+        if (data is Map<String, dynamic>) {
+          final msg = data['message'] as String?;
+          // Only surface server messages that look user-safe.
+          if (msg != null &&
+              msg.isNotEmpty &&
+              msg.length < 120 &&
+              !msg.contains(RegExp(r'exception|traceback|sql|Error:',
+                  caseSensitive: false))) {
+            return msg;
+          }
+        }
+        return 'Invalid email or password. Please try again.';
+      }
       final data = error.response?.data;
       if (data is Map<String, dynamic>) {
-        return data['message'] as String? ?? 'An error occurred';
+        final msg = data['message'] as String?;
+        if (msg != null && msg.isNotEmpty && msg.length < 120) {
+          return msg;
+        }
       }
-      return error.message ?? 'Network error';
+      return 'Something went wrong. Please try again.';
     }
-    return error.toString();
+    return 'Something went wrong. Please try again.';
   }
 }
 
-final authStateProvider =
-    StateNotifierProvider<AuthNotifier, AuthState>((ref) {
+final authStateProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   final apiClient = ref.watch(apiClientProvider);
   final localStorage = ref.watch(localStorageProvider);
 

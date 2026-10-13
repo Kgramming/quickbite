@@ -5,6 +5,11 @@ import '../providers/theme_provider.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/premium_widgets.dart';
 
+/// Demo credentials shown prefilled on the login form.
+/// These are development-only credentials from the backend seed data.
+const String _demoEmail = 'customer@example.com';
+const String _demoPassword = 'customer123';
+
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -26,19 +31,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   @override
   void initState() {
     super.initState();
-    _emailController = TextEditingController();
-    _passwordController = TextEditingController();
+    // Prefill demo credentials so the user can sign in with one tap.
+    // Password stays masked; the eye toggle reveals it.
+    _emailController = TextEditingController(text: _demoEmail);
+    _passwordController = TextEditingController(text: _demoPassword);
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
-    _fadeIn = CurvedAnimation(
-        parent: _animController, curve: Curves.easeOut);
+    _fadeIn = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _slideUp = Tween<Offset>(
       begin: const Offset(0, 0.12),
       end: Offset.zero,
-    ).animate(CurvedAnimation(
-        parent: _animController, curve: Curves.easeOutCubic));
+    ).animate(
+        CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic));
     _animController.forward();
   }
 
@@ -85,18 +91,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             password: _passwordController.text,
           );
       if (mounted) context.go('/');
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Login failed: $e'),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        );
-      }
+    } catch (_) {
+      // The error is already stored in authStateProvider and shown inline
+      // in the card below. No snackbar: avoids duplicate raw error dumps.
     }
   }
 
@@ -123,178 +120,203 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             opacity: _fadeIn,
             child: SlideTransition(
               position: _slideUp,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 32),
-                    // Brand mark
-                    Center(
-                      child: Container(
-                        width: 92,
-                        height: 92,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              tokens.primary,
-                              tokens.primaryDark
-                            ],
+              child: Center(
+                child: SingleChildScrollView(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 440),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 32, vertical: 36),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).cardColor,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 32,
+                            offset: const Offset(0, 12),
                           ),
-                          borderRadius: BorderRadius.circular(
-                              22),
-                          boxShadow: [
-                            BoxShadow(
-                              color: tokens.primary
-                                  .withValues(alpha: 0.4),
-                              blurRadius: 24,
-                              offset: const Offset(0, 10),
+                        ],
+                        border: Border.all(
+                          color: Theme.of(context).dividerColor,
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Brand mark
+                          Center(
+                            child: Container(
+                              width: 72,
+                              height: 72,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [tokens.primary, tokens.primaryDark],
+                                ),
+                                borderRadius: BorderRadius.circular(18),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color:
+                                        tokens.primary.withValues(alpha: 0.35),
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                ],
+                              ),
+                              child: const Center(
+                                child: Text(
+                                  'QB',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 30,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -1,
+                                  ),
+                                ),
+                              ),
                             ),
-                          ],
-                        ),
-                        child: const Center(
-                          child: Text(
-                            'QB',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 38,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -1,
+                          ),
+                          const SizedBox(height: 20),
+                          Text(
+                            'Welcome to QuickBite',
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Sign in to order your favorites.',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                    color: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.color),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 28),
+                          // Email
+                          TextField(
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
+                            autocorrect: false,
+                            decoration: InputDecoration(
+                              hintText: 'Email address',
+                              prefixIcon:
+                                  const Icon(Icons.mail_outline_rounded),
+                              errorText: _emailError,
                             ),
                           ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Welcome to QuickBite',
-                      style: Theme.of(context).textTheme.displayMedium,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Craving something delicious?\nSign in and let\'s fix that.',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(
-                              color: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.color),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 32),
-                    // Email
-                    TextField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.next,
-                      autocorrect: false,
-                      decoration: InputDecoration(
-                        hintText: 'Email address',
-                        prefixIcon: const Icon(Icons.mail_outline_rounded),
-                        errorText: _emailError,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    // Password
-                    TextField(
-                      controller: _passwordController,
-                      obscureText: _obscurePassword,
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => _validateAndLogin(),
-                      decoration: InputDecoration(
-                        hintText: 'Password',
-                        prefixIcon:
-                            const Icon(Icons.lock_outline_rounded),
-                        errorText: _passwordError,
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined,
+                          const SizedBox(height: 16),
+                          // Password
+                          TextField(
+                            controller: _passwordController,
+                            obscureText: _obscurePassword,
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) => _validateAndLogin(),
+                            decoration: InputDecoration(
+                              hintText: 'Password',
+                              prefixIcon:
+                                  const Icon(Icons.lock_outline_rounded),
+                              errorText: _passwordError,
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_outlined
+                                      : Icons.visibility_off_outlined,
+                                ),
+                                onPressed: () => setState(
+                                    () => _obscurePassword = !_obscurePassword),
+                                tooltip: _obscurePassword
+                                    ? 'Show password'
+                                    : 'Hide password',
+                              ),
+                            ),
                           ),
-                          onPressed: () => setState(
-                              () => _obscurePassword = !_obscurePassword),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    PremiumButton(
-                      label: 'Sign In',
-                      icon: Icons.login_rounded,
-                      isLoading: authState.isLoading,
-                      onPressed:
-                          authState.isLoading ? null : _validateAndLogin,
-                    ),
-                    if (authState.error != null) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: tokens.danger.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(
-                              12),
-                          border: Border.all(
-                            color:
-                                tokens.danger.withValues(alpha: 0.3),
+                          const SizedBox(height: 24),
+                          PremiumButton(
+                            label: 'Sign In',
+                            icon: Icons.login_rounded,
+                            isLoading: authState.isLoading,
+                            onPressed:
+                                authState.isLoading ? null : _validateAndLogin,
                           ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.error_outline_rounded,
-                                color: tokens.danger, size: 20),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                authState.error!,
-                                style: TextStyle(
-                                    color: tokens.danger, fontSize: 13),
+                          // Inline error — single, compact, no raw dumps.
+                          if (authState.error != null) ...[
+                            const SizedBox(height: 16),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: tokens.danger.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: tokens.danger.withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(Icons.error_outline_rounded,
+                                      color: tokens.danger, size: 20),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      authState.error!,
+                                      style: TextStyle(
+                                          color: tokens.danger,
+                                          fontSize: 13,
+                                          height: 1.4),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 32),
-                    // Demo hint
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).cardColor,
-                        borderRadius:
-                            BorderRadius.circular(12),
-                        border: Border.all(
-                            color: Theme.of(context).dividerColor),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.info_outline_rounded,
-                              size: 16,
-                              color: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.color),
-                          const SizedBox(width: 4),
-                          Flexible(
-                            child: Text(
-                              'Demo: customer@example.com / customer123',
-                              style: Theme.of(context).textTheme.bodySmall,
-                              textAlign: TextAlign.center,
+                          const SizedBox(height: 20),
+                          // Demo hint
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: tokens.accentSoft.withValues(alpha: 0.4),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.info_outline_rounded,
+                                    size: 16,
+                                    color: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.color),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    'Demo credentials are prefilled — just tap Sign In.',
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 24),
-                  ],
+                  ),
                 ),
               ),
             ),
