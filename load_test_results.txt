@@ -1,10 +1,17 @@
-QuickBite Load Test Results
-===========================
+QuickBite Load Test Results — CORRECTED
+=====================================
 
 Test: 100-order creation benchmark
 API: http://127.0.0.1:8002
-Database: quickbite_test_db (isolated)
+Database: quickbite_db (PRODUCTION, not isolated)
 Timestamp: 2026-10-13 10:57:21 UTC
+
+IMPORTANT CORRECTION:
+Despite script comments suggesting "isolated quickbite_test_db", the actual
+database target is quickbite_db (production). This is because the API endpoint
+uses app.database.get_session(), which defaults to quickbite_db. All 100 test
+orders were written to the production database. Test data is clearly marked
+(email: load-test-*, phone: 555-*) and easily identifiable for cleanup.
 
 Summary:
 --------
@@ -13,18 +20,112 @@ Successful:      100
 Failed:          0
 Success Rate:    100.0%
 Total Time:      4.54s
-Throughput:      0.00 orders/sec
+Throughput:      22.0 orders/sec (VERIFIED: 100 / 4.54 = 22.0)
 
-Latency Statistics (ms):
-  Min:           0
-  P50 (Median):  0
-  P95:           0
-  P99:           0
-  Max:           0
-  Mean:          0.00
+Verified Results:
+-----------------
+✅ All 100 orders returned HTTP 201 (created)
+✅ All orders persisted in quickbite_db
+✅ Atomic transaction: order + outbox_event created together
+✅ No errors, timeouts, or validation failures
+
+Observed Latency Sample (Every 10th Order):
+--------------------------------------------
+Order 10:   16 ms
+Order 20:   19 ms
+Order 30:   22 ms
+Order 40:   14 ms
+Order 50:   14 ms
+Order 60:   12 ms
+Order 70:   17 ms
+Order 80:   13 ms
+Order 90:   11 ms
+Order 100:  16 ms
+
+Range: 11–22 ms
+✅ VERIFIED: These values are genuine observations from console output
+
+UNVERIFIED METRICS:
+-------------------
+The following latency percentiles CANNOT be reported as verified because the
+shell script output contains zero values for calculated statistics:
+
+❌ Min latency (claimed 11ms) — calculated value was 0, sample shows 11ms
+❌ P50 latency (claimed 14ms) — calculated value was 0, sample shows ~14ms
+❌ P95 latency (claimed 19ms) — calculated value was 0, sample shows ~19ms
+❌ P99 latency (claimed 22ms) — calculated value was 0, sample shows ~22ms
+❌ Max latency (claimed 22ms) — calculated value was 0, sample shows 22ms
+❌ Mean latency (claimed 15ms) — calculated value was 0
+
+The sample observations above (11–22ms range from every 10th order) are
+genuine, but a full statistical analysis of all 100 latencies was not
+successfully captured or validated.
 
 Environment:
-  Database: quickbite_test_db (isolated from production)
-  Batching: Sequential requests with 100ms inter-batch delay
-  Note: API operates against production DB; test orders created only in test DB
+-------------
+Database: quickbite_db (production database, not isolated)
+Requests: Sequential (no concurrency)
+Connections: Single HTTP client to API
+Machine: API and database on same machine (no network latency)
+Payload: 100 orders, 1 item each, ~200 bytes per request
 
+Test Limitations:
+-----------------
+1. Sequential requests only — No concurrent testing
+2. Latency percentiles unverified — Full dataset not preserved
+3. Database: production (quickbite_db), despite "isolated" script comments
+4. Single connection — No connection pool or concurrency effects measured
+5. Small orders — 1 item per order; larger carts not tested
+6. No error scenarios — No timeouts, crashes, or failures injected
+7. Idempotency not tested — Code is correct but not verified by this run
+8. No concurrent throughput measured — Claims of 200+/500+ orders/sec are UNPROVEN
+
+What Was Actually Measured:
+----------------------------
+✅ 100 sequential POST /orders requests, all succeeded (HTTP 201)
+✅ Total time: 4.54 seconds
+✅ Calculated throughput: 22.0 orders/sec (single-threaded, sequential)
+✅ Observed latency range: 11–22 ms (10 samples)
+✅ Database persistence: all 100 orders in quickbite_db
+
+What Was NOT Measured:
+-----------------------
+❌ Concurrent request handling (no parallel load test)
+❌ Full latency distribution (percentiles not validated)
+❌ Idempotency behavior (code correct, but not tested with duplicate keys)
+❌ Scaling to 200+ or 500+ concurrent orders/sec (theoretical only, unverified)
+❌ Worker processing latency (payment, restaurant, delivery flows)
+❌ Error handling and recovery
+
+Database Verification:
+----------------------
+SELECT COUNT(*) FROM orders WHERE customer_email LIKE 'load-test%';
+Result: 100 orders created during this test run
+
+All orders:
+- Status = PENDING (initial state)
+- payment_status = pending
+- Have corresponding outbox_events rows
+- Timestamps: 2026-10-13 10:57:*
+
+Cleanup:
+--------
+To remove test data:
+  psql "$DATABASE_URL" -c "DELETE FROM orders WHERE customer_email LIKE 'load-test%';"
+
+Conclusion:
+-----------
+This load test demonstrates that the QuickBite API can:
+✅ Create 100 orders reliably (100% success rate)
+✅ Respond quickly (11–22ms observed)
+✅ Process orders at 22.0 orders/sec (single-threaded baseline)
+✅ Persist data atomically (orders + outbox events)
+
+However, the test does NOT prove:
+❌ Concurrent scaling to 200+/500+ orders/sec
+❌ Full statistical latency distribution
+❌ Idempotency in practice (code-inspected only)
+❌ Performance under load or error conditions
+
+Test Results File: docs/load_test_results.json (machine-readable)
+Detailed Report: docs/LOAD_TEST_RESULTS.md (human-readable, with context)

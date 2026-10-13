@@ -2,49 +2,59 @@
   "timestamp": "2026-10-13T10:57:21Z",
   "test_type": "100-order creation benchmark",
   "api_url": "http://127.0.0.1:8002",
-  "database": "quickbite_db (production)",
-  "environment": "Production database (same as API)",
+  "database_target": "quickbite_db (production, not isolated test DB)",
+  "environment": "Production database; API endpoint targets quickbite_db by default",
   "test_script": "load_test.sh",
   "duration_seconds": 4.54,
   "summary": {
-    "total_orders": 100,
-    "successful": 100,
+    "total_orders_requested": 100,
+    "successful_http_201": 100,
     "failed": 0,
     "success_rate_percent": 100.0,
     "total_time_seconds": 4.54,
     "throughput_orders_per_sec": 22.0,
-    "latency_min_ms": 11,
-    "latency_p50_ms": 14,
-    "latency_p95_ms": 19,
-    "latency_p99_ms": 22,
-    "latency_max_ms": 22,
-    "latency_mean_ms": 15.2,
-    "idempotency_tested": true,
-    "idempotency_success": true
+    "throughput_note": "Measured: 100 orders / 4.54 seconds = 22.0 orders/sec. Sequential requests only; no concurrency tested.",
+    "latency_percentiles_status": "UNVERIFIED - shell script output contains zero values; full latency dataset not preserved",
+    "latency_sample_observed_ms": [
+      16,
+      19,
+      22,
+      14,
+      14,
+      12,
+      17,
+      13,
+      11,
+      16
+    ],
+    "latency_sample_note": "From console output (every 10th order); representative of observed times, not full statistical calculation",
+    "idempotency_status": "CODE-INSPECTED, NOT LOAD-TEST-VERIFIED",
+    "idempotency_code_correct": true,
+    "idempotency_implementation": "app/routes.py lines 92-96 + app/models.py line 67 (UniqueConstraint enforced)"
   },
-  "observed_latencies_sample": [
-    16,
-    19,
-    22,
-    14,
-    14,
-    12,
-    17,
-    13,
-    11,
-    16
-  ],
   "database_verification": {
     "orders_created": 100,
     "database": "quickbite_db",
     "query": "SELECT COUNT(*) FROM orders WHERE customer_email LIKE 'load-test%'",
-    "result": "100 orders persisted"
+    "result": "100 orders persisted",
+    "note": "All orders were written to production database (quickbite_db), not isolated test database. Test data is clearly marked and easily queryable."
   },
-  "notes": [
-    "Load test creates real orders in production database",
-    "All 100 orders persisted with corresponding outbox events",
-    "Idempotency verified: duplicate requests return same order ID",
-    "Sequential requests; no concurrency tested",
-    "API and database on same machine (no network latency)"
+  "limitations": [
+    "Database target: quickbite_db (production), despite script comments suggesting isolation",
+    "Latency percentiles: unverified (script output shows zeros; full dataset not captured)",
+    "Sequential requests only: no concurrent load testing performed",
+    "Idempotency: code is correct, but not verified by this load test run",
+    "API and database on same machine: no network latency measured",
+    "No concurrent throughput measured: 22 orders/sec is single-threaded baseline only"
+  ],
+  "concurrent_scaling_claim": "THEORETICAL, UNVERIFIED",
+  "concurrent_scaling_note": "Markdown mentions 500+ concurrent orders/sec as extrapolation. This is NOT measured. A conservative estimate would be 10× baseline (220+ orders/sec) if API can sustain 10 parallel connections, but this is unproven.",
+  "what_was_actually_measured": [
+    "100 sequential POST requests to /orders endpoint",
+    "100% success rate (all returned HTTP 201)",
+    "Throughput: 22 orders/sec (100 / 4.54s)",
+    "Sample latencies: 11-22ms range observed",
+    "All 100 orders persisted in quickbite_db",
+    "No errors, timeouts, or database failures"
   ]
 }
