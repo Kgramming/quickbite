@@ -10,14 +10,39 @@ import '../widgets/premium_widgets.dart';
 
 /// Premium order tracking: live status timeline, order summary,
 /// driver card and failure states. Polls via orderStatusRefreshProvider.
-class OrderTrackingScreen extends ConsumerWidget {
+class OrderTrackingScreen extends ConsumerStatefulWidget {
   final String orderId;
 
   const OrderTrackingScreen({super.key, required this.orderId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final orderStream = ref.watch(orderStatusRefreshProvider(orderId));
+  ConsumerState<OrderTrackingScreen> createState() =>
+      _OrderTrackingScreenState();
+}
+
+class _OrderTrackingScreenState
+    extends ConsumerState<OrderTrackingScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _pulseController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final orderStream = ref.watch(orderStatusRefreshProvider(widget.orderId));
     final tokens = ref.watch(themeTokensProvider);
 
     return Scaffold(
@@ -25,39 +50,47 @@ class OrderTrackingScreen extends ConsumerWidget {
         title: const Text('Track order'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => context.pop(),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/orders');
+            }
+          },
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
             onPressed: () =>
-                ref.invalidate(orderStatusRefreshProvider(orderId)),
+                ref.invalidate(orderStatusRefreshProvider(widget.orderId)),
             tooltip: 'Refresh',
           ),
         ],
       ),
       body: orderStream.when(
-        data: (order) => _buildBody(context, order, tokens),
+        data: (order) => _buildBody(context, ref, order, tokens),
         loading: () => const Center(
             child: CircularProgressIndicator()),
         error: (err, _) => ErrorCard(
           message: 'Couldn\'t load this order.\n$err',
           onRetry: () =>
-              ref.invalidate(orderStatusRefreshProvider(orderId)),
+              ref.invalidate(orderStatusRefreshProvider(widget.orderId)),
         ),
       ),
     );
   }
 
-  Widget _buildBody(
-      BuildContext context, Order order, QuickBiteTokens tokens) {
+  Widget _buildBody(BuildContext context, WidgetRef ref, Order order,
+      QuickBiteTokens tokens) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Order header card
-          Container(
+          _StaggeredIn(
+            delay: 0,
+            child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [tokens.primary, tokens.primaryDark]),
@@ -128,9 +161,22 @@ class OrderTrackingScreen extends ConsumerWidget {
               ],
             ),
           ),
+        ),
+          const SizedBox(height: 16),
+          // Animated journey progress
+          _StaggeredIn(
+            delay: 100,
+            child: _JourneyProgress(
+              status: order.status,
+              tokens: tokens,
+              pulseController: _pulseController,
+            ),
+          ),
           const SizedBox(height: 16),
           // Timeline card
-          Container(
+          _StaggeredIn(
+            delay: 200,
+            child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Theme.of(context).cardColor,
@@ -148,7 +194,7 @@ class OrderTrackingScreen extends ConsumerWidget {
                 Consumer(
                   builder: (context, ref, _) {
                     final historyAsync =
-                        ref.watch(orderHistoryProvider(orderId));
+                        ref.watch(orderHistoryProvider(widget.orderId));
                     return historyAsync.when(
                       data: (history) => OrderTimeline(
                         history: history,
@@ -170,6 +216,7 @@ class OrderTrackingScreen extends ConsumerWidget {
               ],
             ),
           ),
+        ),
           // Failure banner
           if (order.status == OrderStatus.paymentFailed ||
               order.status == OrderStatus.failed) ...[
@@ -353,5 +400,259 @@ class OrderTrackingScreen extends ConsumerWidget {
 
   String _minor(int v) {
     return '₹${v ~/ 100}.${(v % 100).toString().padLeft(2, '0')}';
+  }
+}
+
+/// Staggered entrance: fades + slides child in with a delay.
+class _StaggeredIn extends StatefulWidget {
+  final int delay;
+  final Widget child;
+
+  const _StaggeredIn({required this.delay, required this.child});
+
+  @override
+  State<_StaggeredIn> createState() => _StaggeredInState();
+}
+
+class _StaggeredInState extends State<_StaggeredIn>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _opacity;
+  late Animation<Offset> _offset;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+    _opacity = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _offset = Tween<Offset>(
+      begin: const Offset(0, 0.15),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+    Future.delayed(Duration(milliseconds: widget.delay), () {
+      if (mounted) _controller.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: SlideTransition(position: _offset, child: widget.child),
+    );
+  }
+}
+
+/// Animated journey progress: visual 4-stage delivery journey with
+/// animated fill bar and pulsing live indicator.
+class _JourneyProgress extends StatelessWidget {
+  final OrderStatus status;
+  final QuickBiteTokens tokens;
+  final AnimationController pulseController;
+
+  const _JourneyProgress({
+    required this.status,
+    required this.tokens,
+    required this.pulseController,
+  });
+
+  static const _stages = [
+    (Icons.receipt_long_rounded, 'Placed'),
+    (Icons.storefront_rounded, 'Preparing'),
+    (Icons.delivery_dining_rounded, 'On the way'),
+    (Icons.home_rounded, 'Delivered'),
+  ];
+
+  int get _currentStage {
+    switch (status) {
+      case OrderStatus.pending:
+        return 0;
+      case OrderStatus.paid:
+        return 1;
+      case OrderStatus.confirmed:
+        return 1;
+      case OrderStatus.driverAssigned:
+        return 2;
+      default:
+        return 0;
+    }
+  }
+
+  bool get _isLive =>
+      status != OrderStatus.paymentFailed &&
+      status != OrderStatus.failed &&
+      status != OrderStatus.cancelled;
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = (_currentStage + 1) / _stages.length;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              // Pulsing live dot
+              if (_isLive)
+                AnimatedBuilder(
+                  animation: pulseController,
+                  builder: (context, _) => Container(
+                    width: 10 + pulseController.value * 4,
+                    height: 10 + pulseController.value * 4,
+                    decoration: BoxDecoration(
+                      color: tokens.success.withValues(
+                        alpha: 0.6 + pulseController.value * 0.4,
+                      ),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: tokens.danger,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              const SizedBox(width: 8),
+              Text(
+                _isLive ? 'LIVE TRACKING' : 'TRACKING ENDED',
+                style: TextStyle(
+                  color: _isLive ? tokens.success : tokens.danger,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${(progress * 100).round()}%',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: tokens.primary,
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Animated progress bar
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: progress),
+            duration: const Duration(milliseconds: 1200),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, _) => ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: LinearProgressIndicator(
+                value: value,
+                minHeight: 8,
+                backgroundColor: tokens.primary.withValues(alpha: 0.12),
+                valueColor: AlwaysStoppedAnimation<Color>(tokens.primary),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Stage icons
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              for (int i = 0; i < _stages.length; i++)
+                _StageIcon(
+                  icon: _stages[i].$1,
+                  label: _stages[i].$2,
+                  isDone: i <= _currentStage,
+                  isCurrent: i == _currentStage && _isLive,
+                  tokens: tokens,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StageIcon extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isDone;
+  final bool isCurrent;
+  final QuickBiteTokens tokens;
+
+  const _StageIcon({
+    required this.icon,
+    required this.label,
+    required this.isDone,
+    required this.isCurrent,
+    required this.tokens,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isDone ? tokens.primary : tokens.primary.withValues(alpha: 0.25);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 400),
+          width: isCurrent ? 52 : 44,
+          height: isCurrent ? 52 : 44,
+          decoration: BoxDecoration(
+            color: isDone
+                ? tokens.primary.withValues(alpha: 0.12)
+                : Colors.transparent,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: color,
+              width: isCurrent ? 2.5 : 1.5,
+            ),
+            boxShadow: isCurrent
+                ? [
+                    BoxShadow(
+                      color: tokens.primary.withValues(alpha: 0.3),
+                      blurRadius: 12,
+                      spreadRadius: 2,
+                    ),
+                  ]
+                : null,
+          ),
+          child: Icon(icon, color: color, size: 22),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: isDone ? FontWeight.w700 : FontWeight.w400,
+            color: isDone
+                ? Theme.of(context).textTheme.bodyMedium?.color
+                : Theme.of(context).textTheme.bodySmall?.color,
+          ),
+        ),
+      ],
+    );
   }
 }
