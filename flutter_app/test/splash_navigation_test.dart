@@ -108,19 +108,35 @@ void main() {
 
       // Advance past the 1400ms splash timer in bounded steps, polling
       // for navigation. Never waits indefinitely.
+      //
+      // Note: when GoRouter navigates splash -> login, the outgoing
+      // SplashScreen stays in the widget tree until the MaterialPage
+      // transition (~300ms) completes. So we wait for BOTH: LoginScreen
+      // present AND SplashScreen removed. Finding LoginScreen alone only
+      // proves navigation started, not that splash is gone.
       bool navigated = false;
-      for (int i = 0; i < 30; i++) {
+      for (int i = 0; i < 40; i++) {
         await tester.pump(const Duration(milliseconds: 100));
-        if (find.byType(LoginScreen).evaluate().isNotEmpty) {
+        final loginFound =
+            find.byType(LoginScreen).evaluate().isNotEmpty;
+        final splashGone =
+            find.byType(SplashScreen).evaluate().isEmpty;
+        if (loginFound && splashGone) {
           navigated = true;
-          print('[TEST] phase 3 done: navigated to login at step $i');
+          print('[TEST] phase 3 done: login shown, splash removed '
+              'at step $i');
           break;
+        }
+        if (loginFound && !splashGone && i % 5 == 0) {
+          print('[TEST] phase 3: login visible at step $i, '
+              'waiting for splash transition to finish...');
         }
       }
 
       // Must navigate to login (not stuck on splash).
       expect(navigated, isTrue,
-          reason: 'Timed out waiting for navigation to LoginScreen');
+          reason: 'Timed out waiting for splash -> login transition '
+              'to complete');
       expect(find.byType(LoginScreen), findsOneWidget);
       expect(find.byType(SplashScreen), findsNothing);
 
