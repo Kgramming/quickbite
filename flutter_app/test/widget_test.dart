@@ -22,6 +22,10 @@ void main() {
     // Verify that the app starts without errors.
     // More comprehensive tests would verify login flow, navigation, etc.
     expect(find.byType(QuickBiteApp), findsOneWidget);
+
+    // Pump for 1.5+ seconds to allow the splash screen's 1.4-second
+    // initialization timer and navigation to complete.
+    await tester.pump(const Duration(milliseconds: 1500));
   });
 }
 

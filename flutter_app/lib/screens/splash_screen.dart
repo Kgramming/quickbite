@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'dart:async';
 import '../config/theme.dart';
 import '../providers/auth_provider.dart';
 
@@ -16,6 +17,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   late AnimationController _controller;
   late Animation<double> _scale;
   late Animation<double> _fade;
+  Timer? _initializeTimer;
 
   @override
   void initState() {
@@ -34,17 +36,21 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   @override
   void dispose() {
+    _initializeTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
   Future<void> _initialize() async {
-    await Future.delayed(const Duration(milliseconds: 1400));
-    if (!mounted) return;
-    await ref.read(authStateProvider.notifier).initializeAuth();
-    if (!mounted) return;
-    final authState = ref.read(authStateProvider);
-    context.go(authState.isAuthenticated ? '/' : '/login');
+    _initializeTimer = Timer(const Duration(milliseconds: 1400), () async {
+      if (!mounted) return;
+      await ref.read(authStateProvider.notifier).initializeAuth();
+      if (!mounted) return;
+      final authState = ref.read(authStateProvider);
+      if (mounted) {
+        context.go(authState.isAuthenticated ? '/' : '/login');
+      }
+    });
   }
 
   @override
