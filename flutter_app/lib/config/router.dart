@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../screens/splash_screen.dart';
@@ -12,12 +13,31 @@ import '../screens/order_history_screen.dart';
 import '../screens/profile_screen.dart';
 import '../providers/auth_provider.dart';
 
+/// Notifies GoRouter when auth state changes WITHOUT recreating the router.
+///
+/// Previously the GoRouter was rebuilt on every auth state change, which reset
+/// navigation to /splash and disposed the SplashScreen mid-initialization —
+/// the `!mounted` guard then blocked navigation forever (infinite splash loop).
+class AuthRefreshNotifier extends ChangeNotifier {
+  AuthRefreshNotifier(this._ref) {
+    _ref.listen(authStateProvider, (_, __) => notifyListeners());
+  }
+
+  final Ref _ref;
+}
+
 final goRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateProvider);
+  final refreshNotifier = AuthRefreshNotifier(ref);
+  ref.onDispose(refreshNotifier.dispose);
 
   return GoRouter(
     initialLocation: '/splash',
+    // Re-evaluate `redirect` on auth changes; the router instance itself
+    // is created once and never reset.
+    refreshListenable: refreshNotifier,
     redirect: (context, state) {
+      // Read (not watch): refreshListenable already triggers re-evaluation.
+      final authState = ref.read(authStateProvider);
       final isLoading = authState.isLoading;
       final isLoggedIn = authState.token != null;
 
