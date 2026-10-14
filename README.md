@@ -15,18 +15,6 @@ Browse 8 restaurants, build a cart, check out with idempotent order placement, a
 
 *Shared from a local instance via ngrok — reachable while that instance is running. Tap "Visit Site" on the ngrok warning page. Demo logins are prefilled on the login screen.*
 
-## Screenshots
-
-| Ops dashboard | Order timeline |
-|---|---|
-| ![Dashboard](docs/screenshots/01-dashboard.png) | ![Order timeline](docs/screenshots/02-order-timeline.png) |
-
-| Chaos Lab | Dark mode |
-|---|---|
-| ![Chaos Lab](docs/screenshots/03-chaos-lab.png) | ![Dark mode](docs/screenshots/04-dark-mode.png) |
-
-*The Flutter customer app is best seen live — open the demo link above on your phone.*
-
 ## Features
 
 ### Customer app (Flutter)
