@@ -5,7 +5,14 @@
 /// all URLs verified returning HTTP 200 as of 2026-10-13).
 ///
 /// If the backend later provides `image_url`, that always takes precedence —
-/// see [QuickBiteImages.forRestaurant] and [forMenuItem].
+/// see [QuickBiteImages.forRestaurant] and [QuickBiteImages.forMenuItem].
+///
+/// Performance: use [QuickBiteImages.imageProvider] with a `cacheWidth` matching the display
+/// size so the codec decodes at (roughly) the rendered size instead of the
+/// full download size. Pair it with the `w` parameter so the CDN also sends
+/// a smaller file.
+import 'package:flutter/painting.dart';
+
 class QuickBiteImages {
   QuickBiteImages._();
 
@@ -18,8 +25,7 @@ class QuickBiteImages {
   static const _indianThali =
       'photo-1546833999-b9f581a1996d'; // indian curry/thali
   static const _samosa = 'photo-1601050690597-df0568f70950'; // samosa
-  static const _paneer =
-      'photo-1631452180519-c014fe946bc7'; // paneer tikka
+  static const _paneer = 'photo-1631452180519-c014fe946bc7'; // paneer tikka
   static const _vadaPav =
       'photo-1606755962773-d324e0a13086'; // vada pav / burger-like
   static const _kebab = 'photo-1599487488170-d11ec9c172f0'; // kebab skewers
@@ -31,23 +37,27 @@ class QuickBiteImages {
       '$_base/$photoId?w=$w&q=80&auto=format&fit=crop';
 
   /// Restaurant hero images keyed by restaurant ID, with name fallback.
+  ///
+  /// [w] is the Unsplash request width. Use ~600 for grid cards, 800 for
+  /// heroes/carousels.
   static String forRestaurant({
     required String restaurantId,
     required String restaurantName,
     String? backendImageUrl,
+    int w = 800,
   }) {
     if (backendImageUrl != null && backendImageUrl.isNotEmpty) {
       return backendImageUrl;
     }
     switch (restaurantId) {
       case 'rest_biryani':
-        return _u(_biryani);
+        return _u(_biryani, w: w);
       case 'rest_pizza':
-        return _u(_pizza);
+        return _u(_pizza, w: w);
       case 'rest_dosa':
-        return _u(_dosa);
+        return _u(_dosa, w: w);
       default:
-        return _u(_forCuisine(restaurantName));
+        return _u(_forCuisine(restaurantName), w: w);
     }
   }
 
@@ -55,32 +65,45 @@ class QuickBiteImages {
   static String forMenuItem({
     required String itemName,
     String? backendImageUrl,
+    int w = 400,
   }) {
     if (backendImageUrl != null && backendImageUrl.isNotEmpty) {
       return backendImageUrl;
     }
     final n = itemName.toLowerCase();
-    if (n.contains('biryani')) return _u(_biryani, w: 400);
+    if (n.contains('biryani')) return _u(_biryani, w: w);
     if (n.contains('dosa') || n.contains('idli') || n.contains('vada')) {
-      return _u(_dosa, w: 400);
+      return _u(_dosa, w: w);
     }
     if (n.contains('pizza') || n.contains('garlic bread')) {
-      return _u(_pizza, w: 400);
+      return _u(_pizza, w: w);
     }
-    if (n.contains('paneer')) return _u(_paneer, w: 400);
+    if (n.contains('paneer')) return _u(_paneer, w: w);
     if (n.contains('kebab') || n.contains('tikka') || n.contains('tangdi')) {
-      return _u(_kebab, w: 400);
+      return _u(_kebab, w: w);
     }
-    if (n.contains('samosa')) return _u(_samosa, w: 400);
+    if (n.contains('samosa')) return _u(_samosa, w: w);
     if (n.contains('burger') || n.contains('vada pav')) {
-      return _u(_vadaPav, w: 400);
+      return _u(_vadaPav, w: w);
     }
     if (n.contains('tiramisu') || n.contains('gulab jamun')) {
-      return _u(_indianThali, w: 400);
+      return _u(_indianThali, w: w);
     }
-    if (n.contains('coffee')) return _u(_indianCurry, w: 400);
-    if (n.contains('raita')) return _u(_indianCurry, w: 400);
-    return _u(_indianCurry, w: 400);
+    if (n.contains('coffee')) return _u(_indianCurry, w: w);
+    if (n.contains('raita')) return _u(_indianCurry, w: w);
+    return _u(_indianCurry, w: w);
+  }
+
+  /// Builds the [ImageProvider] widgets should use for [url].
+  ///
+  /// When [cacheWidth] is given the image is decoded at that width, which
+  /// keeps the in-memory image cache entry shared between every widget (and
+  /// `precacheImage` calls) using the same URL + width. Use the same
+  /// [cacheWidth] for the widget and its precache call.
+  static ImageProvider imageProvider(String url, {int? cacheWidth}) {
+    final base = NetworkImage(url);
+    if (cacheWidth == null) return base;
+    return ResizeImage(base, width: cacheWidth);
   }
 
   static String _forCuisine(String name) {

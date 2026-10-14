@@ -47,6 +47,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     ('Drinks', Icons.local_cafe_rounded),
   ];
 
+  String? _precachedKey;
+
   @override
   void initState() {
     super.initState();
@@ -54,13 +56,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       vsync: this,
       duration: const Duration(milliseconds: 700),
     );
-    _heroFade =
-        CurvedAnimation(parent: _heroController, curve: Curves.easeOut);
+    _heroFade = CurvedAnimation(parent: _heroController, curve: Curves.easeOut);
     _heroSlide = Tween<Offset>(
       begin: const Offset(0, 0.2),
       end: Offset.zero,
-    ).animate(CurvedAnimation(
-        parent: _heroController, curve: Curves.easeOutCubic));
+    ).animate(
+        CurvedAnimation(parent: _heroController, curve: Curves.easeOutCubic));
     _heroController.forward();
   }
 
@@ -82,73 +83,85 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1200),
-            child: CustomScrollView(
-              slivers: [
-                // ── Hero header ──
-                SliverToBoxAdapter(
-                  child: FadeTransition(
-                    opacity: _heroFade,
-                    child: SlideTransition(
-                      position: _heroSlide,
-                      child: _HeroHeader(
-                        tokens: tokens,
-                        userName: user?.name ?? 'Food lover',
-                        greeting: _greeting(),
+            child: RefreshIndicator(
+              onRefresh: _refreshRestaurants,
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  // ── Hero header ──
+                  SliverToBoxAdapter(
+                    child: FadeTransition(
+                      opacity: _heroFade,
+                      child: SlideTransition(
+                        position: _heroSlide,
+                        child: _HeroHeader(
+                          tokens: tokens,
+                          userName: user?.name ?? 'Food lover',
+                          greeting: _greeting(),
+                        ),
                       ),
                     ),
                   ),
-                ),
-                // ── Search ──
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-                    child: _SearchBar(
-                      controller: _searchController,
-                      onChanged: (v) => setState(
-                          () => _searchQuery = v.trim().toLowerCase()),
-                      onClear: () {
-                        _searchController.clear();
-                        setState(() => _searchQuery = '');
-                      },
-                      hasQuery: _searchQuery.isNotEmpty,
-                    ),
-                  ),
-                ),
-                // ── Categories ──
-                if (_searchQuery.isEmpty)
+                  // ── Search ──
                   SliverToBoxAdapter(
-                    child: _CategoryPills(
-                      categories: _categories,
-                      selected: _selectedCategory,
-                      tokens: tokens,
-                      onSelect: (c) =>
-                          setState(() => _selectedCategory = c),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                      child: _SearchBar(
+                        controller: _searchController,
+                        onChanged: (v) => setState(
+                            () => _searchQuery = v.trim().toLowerCase()),
+                        onClear: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                        hasQuery: _searchQuery.isNotEmpty,
+                      ),
                     ),
                   ),
-                // ── Content ──
-                restaurantsAsync.when(
-                  data: (page) =>
-                      _buildContent(context, tokens, page),
-                  loading: () => const SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: _ShimmerGrid(),
-                  ),
-                  error: (e, _) => SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: QbErrorState(
-                      message:
-                          'Could not load restaurants. Check your connection and try again.',
-                      onRetry: () =>
-                          ref.invalidate(restaurantsProvider(1)),
+                  // ── Categories ──
+                  if (_searchQuery.isEmpty)
+                    SliverToBoxAdapter(
+                      child: _CategoryPills(
+                        categories: _categories,
+                        selected: _selectedCategory,
+                        tokens: tokens,
+                        onSelect: (c) => setState(() => _selectedCategory = c),
+                      ),
+                    ),
+                  // ── Content ──
+                  restaurantsAsync.when(
+                    data: (page) => _buildContent(context, tokens, page),
+                    loading: () => const SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: _ShimmerGrid(),
+                    ),
+                    error: (e, _) => SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: QbErrorState(
+                        message:
+                            'Could not load restaurants. Check your connection and try again.',
+                        onRetry: () => ref.invalidate(restaurantsProvider(1)),
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _refreshRestaurants() async {
+    ref.invalidate(restaurantsProvider(1));
+    // Await the refetch so the indicator dismisses once fresh data
+    // (or a rendered error) is in place.
+    try {
+      await ref.read(restaurantsProvider(1).future);
+    } catch (_) {
+      // The error state is rendered by the AsyncValue in build().
+    }
   }
 
   String _greeting() {
@@ -167,10 +180,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       }
       if (_selectedCategory != 'All') {
         return r.name.toLowerCase().contains(_selectedCategory.toLowerCase()) ||
-            r.description.toLowerCase().contains(_selectedCategory.toLowerCase());
+            r.description
+                .toLowerCase()
+                .contains(_selectedCategory.toLowerCase());
       }
       return true;
     }).toList();
+
+    // Warm the image cache for the first cards so scrolling doesn't trigger
+    // decode jank one card at a time. Runs once per data set; the provider
+    // below matches the one the cards render with, so cache entries are
+    // shared.
+    final cacheKey = page.items.map((r) => r.id).join(',');
+    if (cacheKey != _precachedKey) {
+      _precachedKey = cacheKey;
+      final urls = restaurants
+          .take(6)
+          .map((r) => QuickBiteImages.forRestaurant(
+                restaurantId: r.id,
+                restaurantName: r.name,
+                backendImageUrl: r.imageUrl,
+                w: 600,
+              ))
+          .toList();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        for (final url in urls) {
+          precacheImage(
+            QuickBiteImages.imageProvider(url, cacheWidth: 600),
+            context,
+          );
+        }
+      });
+    }
 
     return SliverList(
       delegate: SliverChildListDelegate([
@@ -225,8 +267,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 return GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate:
-                      SliverGridDelegateWithFixedCrossAxisCount(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: crossAxisCount,
                     childAspectRatio: 1.12,
                     crossAxisSpacing: 16,
@@ -235,8 +276,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   itemCount: restaurants.length,
                   itemBuilder: (context, i) => _StaggeredCard(
                     delay: (i % 6) * 70,
-                    child: _RestaurantCard(
-                        restaurant: restaurants[i]),
+                    child: _RestaurantCard(restaurant: restaurants[i]),
                   ),
                 );
               },
@@ -410,12 +450,10 @@ class _CategoryPills extends StatelessWidget {
             onTap: () => onSelect(label),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 250),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: isSelected
-                    ? tokens.primary
-                    : Theme.of(context).cardColor,
+                color:
+                    isSelected ? tokens.primary : Theme.of(context).cardColor,
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(
                   color: isSelected
@@ -425,8 +463,7 @@ class _CategoryPills extends StatelessWidget {
                 boxShadow: isSelected
                     ? [
                         BoxShadow(
-                          color:
-                              tokens.primary.withValues(alpha: 0.3),
+                          color: tokens.primary.withValues(alpha: 0.3),
                           blurRadius: 12,
                           offset: const Offset(0, 4),
                         ),
@@ -438,9 +475,7 @@ class _CategoryPills extends StatelessWidget {
                 children: [
                   Icon(icon,
                       size: 18,
-                      color: isSelected
-                          ? Colors.white
-                          : tokens.primary),
+                      color: isSelected ? Colors.white : tokens.primary),
                   const SizedBox(width: 6),
                   Text(
                     label,
@@ -449,10 +484,7 @@ class _CategoryPills extends StatelessWidget {
                       fontSize: 14,
                       color: isSelected
                           ? Colors.white
-                          : Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.color,
+                          : Theme.of(context).textTheme.bodyMedium?.color,
                     ),
                   ),
                 ],
@@ -470,12 +502,10 @@ class _FeaturedCarousel extends StatefulWidget {
   final QuickBiteTokens tokens;
   final List<Restaurant> restaurants;
 
-  const _FeaturedCarousel(
-      {required this.tokens, required this.restaurants});
+  const _FeaturedCarousel({required this.tokens, required this.restaurants});
 
   @override
-  State<_FeaturedCarousel> createState() =>
-      _FeaturedCarouselState();
+  State<_FeaturedCarousel> createState() => _FeaturedCarouselState();
 }
 
 class _FeaturedCarouselState extends State<_FeaturedCarousel> {
@@ -518,10 +548,8 @@ class _FeaturedCarouselState extends State<_FeaturedCarousel> {
             itemBuilder: (context, i) {
               final r = widget.restaurants[i];
               return Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6),
-                child: _FeaturedCard(
-                    tokens: widget.tokens, restaurant: r),
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: _FeaturedCard(tokens: widget.tokens, restaurant: r),
               );
             },
           ),
@@ -531,20 +559,16 @@ class _FeaturedCarouselState extends State<_FeaturedCarousel> {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            for (int i = 0;
-                i < widget.restaurants.length;
-                i++)
+            for (int i = 0; i < widget.restaurants.length; i++)
               AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
-                margin:
-                    const EdgeInsets.symmetric(horizontal: 3),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
                 width: i == _current ? 24 : 8,
                 height: 8,
                 decoration: BoxDecoration(
                   color: i == _current
                       ? widget.tokens.primary
-                      : widget.tokens.primary
-                          .withValues(alpha: 0.2),
+                      : widget.tokens.primary.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
@@ -559,8 +583,7 @@ class _FeaturedCard extends StatelessWidget {
   final QuickBiteTokens tokens;
   final Restaurant restaurant;
 
-  const _FeaturedCard(
-      {required this.tokens, required this.restaurant});
+  const _FeaturedCard({required this.tokens, required this.restaurant});
 
   @override
   Widget build(BuildContext context) {
@@ -570,21 +593,22 @@ class _FeaturedCard extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(22),
           image: DecorationImage(
-            image: NetworkImage(
+            image: QuickBiteImages.imageProvider(
               QuickBiteImages.forRestaurant(
                 restaurantId: restaurant.id,
                 restaurantName: restaurant.name,
                 backendImageUrl: restaurant.imageUrl,
               ),
+              cacheWidth: 800,
             ),
             fit: BoxFit.cover,
             onError: (_, __) {},
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.2),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
+              color: Colors.black.withValues(alpha: 0.14),
+              blurRadius: 14,
+              offset: const Offset(0, 5),
             ),
           ],
         ),
@@ -607,13 +631,13 @@ class _FeaturedCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 5),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.3)),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: 0.3)),
                   ),
                   child: const Text('✨ FEATURED',
                       style: TextStyle(
@@ -632,8 +656,7 @@ class _FeaturedCard extends StatelessWidget {
                 Text(restaurant.description,
                     style: TextStyle(
                         fontSize: 14,
-                        color:
-                            Colors.white.withValues(alpha: 0.85)),
+                        color: Colors.white.withValues(alpha: 0.85)),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
               ],
@@ -668,8 +691,8 @@ class _PressableState extends State<_Pressable>
       vsync: this,
       duration: const Duration(milliseconds: 120),
     );
-    _scale = Tween(begin: 1.0, end: 0.96).animate(
-        CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    _scale = Tween(begin: 1.0, end: 0.96)
+        .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
   }
 
   @override
@@ -697,12 +720,10 @@ class _StaggeredCard extends StatefulWidget {
   final int delay;
   final Widget child;
 
-  const _StaggeredCard(
-      {required this.delay, required this.child});
+  const _StaggeredCard({required this.delay, required this.child});
 
   @override
-  State<_StaggeredCard> createState() =>
-      _StaggeredCardState();
+  State<_StaggeredCard> createState() => _StaggeredCardState();
 }
 
 class _StaggeredCardState extends State<_StaggeredCard>
@@ -718,13 +739,11 @@ class _StaggeredCardState extends State<_StaggeredCard>
       vsync: this,
       duration: const Duration(milliseconds: 450),
     );
-    _opacity =
-        CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _opacity = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
     _offset = Tween<Offset>(
       begin: const Offset(0, 0.12),
       end: Offset.zero,
-    ).animate(CurvedAnimation(
-        parent: _controller, curve: Curves.easeOutCubic));
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
     Future.delayed(Duration(milliseconds: widget.delay), () {
       if (mounted) _controller.forward();
     });
@@ -740,8 +759,7 @@ class _StaggeredCardState extends State<_StaggeredCard>
   Widget build(BuildContext context) {
     return FadeTransition(
       opacity: _opacity,
-      child: SlideTransition(
-          position: _offset, child: widget.child),
+      child: SlideTransition(position: _offset, child: widget.child),
     );
   }
 }
@@ -784,8 +802,7 @@ class _ShimmerGridState extends State<_ShimmerGrid>
           child: GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            gridDelegate:
-                const SliverGridDelegateWithFixedCrossAxisCount(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
               childAspectRatio: 1.12,
               crossAxisSpacing: 16,
@@ -794,9 +811,7 @@ class _ShimmerGridState extends State<_ShimmerGrid>
             itemCount: 6,
             itemBuilder: (_, __) => Container(
               decoration: BoxDecoration(
-                color: Theme.of(context)
-                    .cardColor
-                    .withValues(alpha: alpha),
+                color: Theme.of(context).cardColor.withValues(alpha: alpha),
                 borderRadius: BorderRadius.circular(16),
               ),
             ),
@@ -824,9 +839,9 @@ class _RestaurantCard extends ConsumerWidget {
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.07),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
             ),
           ],
         ),
@@ -837,8 +852,8 @@ class _RestaurantCard extends ConsumerWidget {
             Expanded(
               flex: 3,
               child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(18)),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(18)),
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -847,9 +862,11 @@ class _RestaurantCard extends ConsumerWidget {
                         restaurantId: restaurant.id,
                         restaurantName: restaurant.name,
                         backendImageUrl: restaurant.imageUrl,
+                        w: 600,
                       ),
                       width: double.infinity,
                       borderRadius: BorderRadius.zero,
+                      cacheWidth: 600,
                     ),
                     // Rating badge
                     if (restaurant.hasRating)
@@ -860,25 +877,19 @@ class _RestaurantCard extends ConsumerWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: Colors.black
-                                .withValues(alpha: 0.65),
-                            borderRadius:
-                                BorderRadius.circular(8),
+                            color: Colors.black.withValues(alpha: 0.65),
+                            borderRadius: BorderRadius.circular(8),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               const Icon(Icons.star_rounded,
-                                  size: 14,
-                                  color: Colors.amber),
+                                  size: 14, color: Colors.amber),
                               const SizedBox(width: 3),
-                              Text(
-                                  restaurant.rating
-                                      .toStringAsFixed(1),
+                              Text(restaurant.rating.toStringAsFixed(1),
                                   style: const TextStyle(
                                       fontSize: 12,
-                                      fontWeight:
-                                          FontWeight.w700,
+                                      fontWeight: FontWeight.w700,
                                       color: Colors.white)),
                             ],
                           ),
@@ -916,19 +927,14 @@ class _RestaurantCard extends ConsumerWidget {
                       const SizedBox(height: 6),
                       Row(
                         children: [
-                          Icon(
-                              Icons
-                                  .delivery_dining_outlined,
-                              size: 14,
-                              color: tokens.primary),
+                          Icon(Icons.delivery_dining_outlined,
+                              size: 14, color: tokens.primary),
                           const SizedBox(width: 4),
-                          Text(
-                              '${restaurant.deliveryTimeMinutes} min',
+                          Text('${restaurant.deliveryTimeMinutes} min',
                               style: TextStyle(
                                   fontSize: 12,
                                   color: tokens.primary,
-                                  fontWeight:
-                                      FontWeight.w600)),
+                                  fontWeight: FontWeight.w600)),
                         ],
                       ),
                     ],

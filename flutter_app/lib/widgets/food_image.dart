@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
+import '../config/food_images.dart';
 import '../config/theme.dart';
 
 /// Elegant food image with gradient fallback.
 ///
 /// Shows the network image when [imageUrl] is provided; otherwise renders a
 /// warm gradient with a food icon — never a broken-image box.
+///
+/// Pass [cacheWidth] matching the display size so the image is decoded at
+/// (roughly) the rendered resolution instead of the full download size —
+/// this is what keeps long image lists smooth.
 class FoodImage extends StatelessWidget {
   final String? imageUrl;
   final double? width;
   final double? height;
   final BorderRadius? borderRadius;
   final IconData fallbackIcon;
+  final int? cacheWidth;
 
   const FoodImage({
     super.key,
@@ -19,6 +25,7 @@ class FoodImage extends StatelessWidget {
     this.height,
     this.borderRadius,
     this.fallbackIcon = Icons.restaurant_rounded,
+    this.cacheWidth,
   });
 
   static const _gradients = [
@@ -51,7 +58,8 @@ class FoodImage extends StatelessWidget {
         borderRadius: radius,
       ),
       child: Center(
-        child: Icon(fallbackIcon, color: Colors.white.withValues(alpha: 0.9),
+        child: Icon(fallbackIcon,
+            color: Colors.white.withValues(alpha: 0.9),
             size: (height ?? 80) * 0.38),
       ),
     );
@@ -60,8 +68,11 @@ class FoodImage extends StatelessWidget {
 
     return ClipRRect(
       borderRadius: radius,
-      child: Image.network(
-        imageUrl!,
+      child: Image(
+        image: QuickBiteImages.imageProvider(
+          imageUrl!,
+          cacheWidth: cacheWidth,
+        ),
         width: width,
         height: height,
         fit: BoxFit.cover,
