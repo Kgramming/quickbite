@@ -171,6 +171,14 @@ class QuickBiteImages {
       return _u(_dosa, w: w);
     }
     if (n.contains('biryani')) return _u(_biryani, w: w);
+    // Breads & rice (before the generic curry fallback: a thali photo shows
+    // breads, and the biryani photo is a rice dish).
+    if (n.contains('naan') || n.contains('paratha') || n.contains('kulcha')) {
+      return _u(_indianThali, w: w);
+    }
+    if (n.contains('jeera rice') || n.contains('steamed rice')) {
+      return _u(_biryani, w: w);
+    }
     if (n.contains('paneer')) return _u(_paneer, w: w);
     if (n.contains('kebab') || n.contains('tikka') || n.contains('tangdi')) {
       return _u(_kebab, w: w);
