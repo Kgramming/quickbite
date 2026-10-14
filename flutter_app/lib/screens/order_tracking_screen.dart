@@ -217,6 +217,61 @@ class _OrderTrackingScreenState
             ),
           ),
         ),
+          // Notifications feed — real backend events for this order
+          _StaggeredIn(
+            delay: 250,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 16, offset: const Offset(0, 6))],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.notifications_outlined,
+                          color: tokens.primary, size: 20),
+                      const SizedBox(width: 8),
+                      Text('Notifications',
+                          style: Theme.of(context).textTheme.titleLarge),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final notifAsync = ref.watch(
+                          orderNotificationsProvider((widget.orderId, 1)));
+                      return notifAsync.when(
+                        data: (notifs) => notifs.isEmpty
+                            ? Text('No notifications yet.',
+                                style: Theme.of(context).textTheme.bodySmall)
+                            : Column(
+                                children: [
+                                  for (final n in notifs)
+                                    _NotificationRow(
+                                        notification: n, tokens: tokens),
+                                ],
+                              ),
+                        loading: () => const SizedBox(
+                          height: 80,
+                          child: Center(
+                              child: CircularProgressIndicator()),
+                        ),
+                        error: (_, __) => Text(
+                          'Could not load notifications.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
           // Failure banner
           if (order.status == OrderStatus.paymentFailed ||
               order.status == OrderStatus.failed) ...[
@@ -452,8 +507,10 @@ class _StaggeredInState extends State<_StaggeredIn>
   }
 }
 
-/// Animated journey progress: visual 4-stage delivery journey with
-/// animated fill bar and pulsing live indicator.
+/// Animated journey progress: 3 honest stages mirroring the real backend
+/// status model (pending -> paid/confirmed -> driverAssigned).
+/// driverAssigned is the terminal live stage at 100% — there is no
+/// backend "delivered" status, so none is shown.
 class _JourneyProgress extends StatelessWidget {
   final OrderStatus status;
   final QuickBiteTokens tokens;
@@ -469,7 +526,6 @@ class _JourneyProgress extends StatelessWidget {
     (Icons.receipt_long_rounded, 'Placed'),
     (Icons.storefront_rounded, 'Preparing'),
     (Icons.delivery_dining_rounded, 'On the way'),
-    (Icons.home_rounded, 'Delivered'),
   ];
 
   int get _currentStage {
@@ -653,6 +709,68 @@ class _StageIcon extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// A single row in the notifications feed: icon by event type,
+/// the backend's message, and a relative timestamp.
+class _NotificationRow extends StatelessWidget {
+  final OrderNotification notification;
+  final QuickBiteTokens tokens;
+
+  const _NotificationRow({required this.notification, required this.tokens});
+
+  IconData get _icon {
+    final t = notification.eventType.toLowerCase();
+    if (t.contains('payment')) return Icons.payments_outlined;
+    if (t.contains('driver')) return Icons.delivery_dining_rounded;
+    if (t.contains('confirm')) return Icons.check_circle_outline_rounded;
+    if (t.contains('fail') || t.contains('cancel')) {
+      return Icons.error_outline_rounded;
+    }
+    return Icons.notifications_outlined;
+  }
+
+  String _relativeTime(DateTime t) {
+    final diff = DateTime.now().difference(t);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: tokens.primary.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(_icon, size: 18, color: tokens.primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(notification.message,
+                    style: Theme.of(context).textTheme.bodyMedium),
+                const SizedBox(height: 2),
+                Text(_relativeTime(notification.createdAt),
+                    style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

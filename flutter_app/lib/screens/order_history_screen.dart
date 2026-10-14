@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../models/order.dart';
+import '../models/restaurant.dart';
 import '../providers/order_provider.dart';
+import '../providers/restaurant_provider.dart';
 import '../providers/theme_provider.dart';
 import '../widgets/qb_widgets.dart';
 
@@ -138,9 +140,43 @@ class _OrderCard extends ConsumerWidget {
                           color: tokens.primary)),
             ],
           ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _reorder(context, ref, order),
+              icon: const Icon(Icons.replay_rounded, size: 18),
+              label: const Text('Order again'),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  /// Rebuilds the cart from a past order's items and jumps to the cart.
+  /// Uses the recorded item details; prices refresh from the cart.
+  void _reorder(BuildContext context, WidgetRef ref, Order order) {
+    final notifier = ref.read(cartProvider.notifier);
+    notifier.clearCart();
+    for (final oi in order.items) {
+      final menuItem = MenuItem(
+        id: oi.menuItemId,
+        name: oi.name,
+        description: '',
+        priceMinor: oi.priceMinor,
+        available: true,
+      );
+      for (var q = 0; q < oi.quantity; q++) {
+        notifier.addItem(menuItem, order.restaurantId);
+      }
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: Text(
+              '${order.items.length} item${order.items.length == 1 ? '' : 's'} added back to your cart')),
+    );
+    context.go('/cart');
   }
 
   String _statusLabel(OrderStatus s) {

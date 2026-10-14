@@ -92,7 +92,21 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                         Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 12),
                 summaryAsync.when(
-                  data: (s) => _SummaryGrid(summary: s),
+                  data: (s) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _DistributionBar(summary: s),
+                      const SizedBox(height: 12),
+                      _SummaryGrid(
+                        summary: s,
+                        selectedStatus: _statusFilter,
+                        onStatusTap: (status) => setState(() {
+                          _statusFilter = status;
+                          _page = 1;
+                        }),
+                      ),
+                    ],
+                  ),
                   loading: () => const SizedBox(
                     height: 120,
                     child:
@@ -199,7 +213,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
 /// Grid of summary stat cards.
 class _SummaryGrid extends ConsumerWidget {
   final AdminSummary summary;
-  const _SummaryGrid({required this.summary});
+  final String? selectedStatus;
+  final ValueChanged<String?> onStatusTap;
+  const _SummaryGrid(
+      {required this.summary,
+      required this.selectedStatus,
+      required this.onStatusTap});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -211,6 +230,9 @@ class _SummaryGrid extends ConsumerWidget {
         value: '${e.value}',
         icon: Icons.receipt_long_outlined,
         color: _statusColor(e.key, tokens),
+        selected: selectedStatus == e.key,
+        onTap: () =>
+            onStatusTap(selectedStatus == e.key ? null : e.key),
       ),
     );
 
@@ -287,17 +309,21 @@ class _StatCard extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color color;
+  final bool selected;
+  final VoidCallback? onTap;
 
   const _StatCard({
     required this.label,
     required this.value,
     required this.icon,
     required this.color,
+    this.selected = false,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return QbCard(
+    final card = QbCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
@@ -313,6 +339,110 @@ class _StatCard extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall,
               maxLines: 1,
               overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
+    if (onTap == null) return card;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        decoration: selected
+            ? BoxDecoration(
+                border: Border.all(color: color, width: 2),
+                borderRadius: BorderRadius.circular(16),
+              )
+            : null,
+        child: card,
+      ),
+    );
+  }
+}
+
+/// Stacked horizontal bar showing the live distribution of orders
+/// across statuses — all values from the backend summary.
+class _DistributionBar extends ConsumerWidget {
+  final AdminSummary summary;
+  const _DistributionBar({required this.summary});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(themeTokensProvider);
+    final total = summary.totalOrders;
+    if (total == 0) return const SizedBox.shrink();
+
+    Color colorFor(String s) {
+      switch (s) {
+        case 'PENDING':
+          return tokens.warning;
+        case 'PAID':
+        case 'CONFIRMED':
+          return tokens.success;
+        case 'DRIVER_ASSIGNED':
+          return tokens.primary;
+        default:
+          return tokens.danger;
+      }
+    }
+
+    String pretty(String s) => s
+        .split('_')
+        .map((w) =>
+            w.isEmpty ? w : w[0] + w.substring(1).toLowerCase())
+        .join(' ');
+
+    final entries =
+        summary.byStatus.entries.where((e) => e.value > 0).toList();
+
+    return QbCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Order distribution',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: SizedBox(
+              height: 14,
+              child: Row(
+                children: [
+                  for (final e in entries)
+                    Expanded(
+                      flex: e.value,
+                      child: Container(color: colorFor(e.key)),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 16,
+            runSpacing: 8,
+            children: [
+              for (final e in entries)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: colorFor(e.key),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${pretty(e.key)} · ${e.value} '
+                      '(${(e.value / total * 100).round()}%)',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+            ],
+          ),
         ],
       ),
     );
