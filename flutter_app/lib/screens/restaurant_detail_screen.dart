@@ -5,6 +5,7 @@ import '../config/food_images.dart';
 import '../models/restaurant.dart';
 import '../providers/restaurant_provider.dart';
 import '../providers/theme_provider.dart';
+import '../utils/cart_helpers.dart';
 import '../widgets/food_image.dart';
 import '../widgets/qb_shell.dart';
 import '../widgets/qb_widgets.dart';
@@ -88,38 +89,16 @@ class _RestaurantDetailScreenState
   /// Adds an item, asking first when the cart holds another restaurant's
   /// dishes — QuickBite allows one restaurant per order.
   Future<void> _addItemWithCheck(MenuItem item, String restaurantName) async {
-    final cart = ref.read(cartProvider);
-    final notifier = ref.read(cartProvider.notifier);
-    final switching = cart.items.isNotEmpty &&
-        cart.restaurantId != null &&
-        cart.restaurantId != widget.restaurantId;
-    if (switching) {
-      final cartName = cart.restaurantName ?? 'another restaurant';
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Start a new order?'),
-          content: Text(
-            'Your cart has items from $cartName. '
-            'QuickBite allows one restaurant per order — '
-            'adding this dish will clear your current cart.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Keep cart'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Start new order'),
-            ),
-          ],
-        ),
-      );
-      if (confirmed != true) return;
-      notifier.clearCart();
-    }
-    notifier.addItem(item, widget.restaurantId, restaurantName: restaurantName);
+    final ok = await ensureSingleRestaurantCart(
+      context,
+      ref,
+      widget.restaurantId,
+      restaurantName: restaurantName,
+    );
+    if (!ok) return;
+    ref
+        .read(cartProvider.notifier)
+        .addItem(item, widget.restaurantId, restaurantName: restaurantName);
   }
 
   Widget _buildBody(BuildContext context, tokens, Restaurant restaurant,

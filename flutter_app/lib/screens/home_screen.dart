@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +9,7 @@ import '../models/restaurant.dart';
 import '../providers/auth_provider.dart';
 import '../providers/restaurant_provider.dart';
 import '../providers/theme_provider.dart';
+import '../utils/cart_helpers.dart';
 import '../widgets/food_image.dart';
 import '../widgets/qb_shell.dart';
 import '../widgets/qb_widgets.dart';
@@ -98,6 +100,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           tokens: tokens,
                           userName: user?.name ?? 'Food lover',
                           greeting: _greeting(),
+                          onSurpriseMe: _openSurprise,
                         ),
                       ),
                     ),
@@ -153,14 +156,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
+  /// Opens the "Surprise me" random dish picker.
+  void _openSurprise() {
+    final page = ref.read(restaurantsProvider(1)).valueOrNull;
+    if (page == null || page.items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                'Restaurants are still loading — try again in a moment.')),
+      );
+      return;
+    }
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _SurpriseSheet(restaurants: page.items),
+    );
+  }
+
   Future<void> _refreshRestaurants() async {
     ref.invalidate(restaurantsProvider(1));
     // Await the refetch so the indicator dismisses once fresh data
     // (or a rendered error) is in place.
     try {
       await ref.read(restaurantsProvider(1).future);
-    } catch (_) {
-      // The error state is rendered by the AsyncValue in build().
+    } catch (_) {      // The error state is rendered by the AsyncValue in build().
     }
   }
 
@@ -293,11 +314,13 @@ class _HeroHeader extends StatelessWidget {
   final QuickBiteTokens tokens;
   final String userName;
   final String greeting;
+  final VoidCallback onSurpriseMe;
 
   const _HeroHeader({
     required this.tokens,
     required this.userName,
     required this.greeting,
+    required this.onSurpriseMe,
   });
 
   @override
@@ -357,6 +380,33 @@ class _HeroHeader extends StatelessWidget {
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.75),
                     fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                GestureDetector(
+                  onTap: onSurpriseMe,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 9),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.35)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.casino_rounded,
+                            color: Colors.white, size: 18),
+                        SizedBox(width: 8),
+                        Text('Surprise me',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14)),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -946,5 +996,246 @@ class _RestaurantCard extends ConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+/// "Surprise me" bottom sheet: a slot-machine style random dish picker.
+///
+/// Picks a random restaurant, loads its real menu, then cycles through
+/// dishes with a playful animation before landing on one. Add to cart
+/// respects the single-restaurant cart rule.
+class _SurpriseSheet extends ConsumerStatefulWidget {
+  final List<Restaurant> restaurants;
+  const _SurpriseSheet({required this.restaurants});
+
+  @override
+  ConsumerState<_SurpriseSheet> createState() => _SurpriseSheetState();
+}
+
+class _SurpriseSheetState extends ConsumerState<_SurpriseSheet> {
+  final _random = Random();
+  Restaurant? _restaurant;
+  List<MenuItem> _menuItems = const [];
+  int _displayIndex = 0;
+  bool _loading = true;
+  bool _shuffling = false;
+  Timer? _timer;
+  int _ticks = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _shuffle();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _shuffle() async {
+    _timer?.cancel();
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _shuffling = false;
+    });
+    try {
+      final restaurant =
+          widget.restaurants[_random.nextInt(widget.restaurants.length)];
+      final menu = await ref.read(
+          restaurantMenuProvider((restaurant.id, 1)).future);
+      if (!mounted) return;
+      if (menu.items.isEmpty) {
+        _shuffle();
+        return;
+      }
+      setState(() {
+        _restaurant = restaurant;
+        _menuItems = menu.items;
+        _loading = false;
+        _shuffling = true;
+        _ticks = 0;
+        _displayIndex = _random.nextInt(menu.items.length);
+      });
+      _timer = Timer.periodic(const Duration(milliseconds: 90), (t) {
+        if (!mounted) {
+          t.cancel();
+          return;
+        }
+        setState(() {
+          _ticks++;
+          _displayIndex = _random.nextInt(_menuItems.length);
+          if (_ticks >= 14) {
+            t.cancel();
+            _shuffling = false;
+          }
+        });
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _addToCart() async {
+    final restaurant = _restaurant;
+    if (restaurant == null || _menuItems.isEmpty || _shuffling) return;
+    final item = _menuItems[_displayIndex];
+    final ok = await ensureSingleRestaurantCart(
+      context,
+      ref,
+      restaurant.id,
+      restaurantName: restaurant.name,
+    );
+    if (!ok || !mounted) return;
+    ref.read(cartProvider.notifier).addItem(
+          item,
+          restaurant.id,
+          restaurantName: restaurant.name,
+        );
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${item.name} added to cart')),
+    );
+    context.go('/cart');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = ref.watch(themeTokensProvider);
+    return SafeArea(
+      child: Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color:
+                    Theme.of(context).dividerColor.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(Icons.casino_rounded,
+                    color: tokens.primary, size: 22),
+                const SizedBox(width: 8),
+                Text("Chef's surprise",
+                    style: Theme.of(context).textTheme.titleLarge),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (_loading)
+              const SizedBox(
+                height: 220,
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_menuItems.isEmpty)
+              const SizedBox(
+                height: 220,
+                child: Center(
+                    child: Text('No dishes found — try again.')),
+              )
+            else
+              _buildDishCard(tokens),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _shuffling || _loading ? null : _shuffle,
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: const Text('Shuffle again'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: QbPrimaryButton(
+                    label: _shuffling ? 'Picking…' : 'Add to cart',
+                    icon: Icons.add_shopping_cart_rounded,
+                    onPressed:
+                        _shuffling || _loading ? null : _addToCart,
+                    expanded: true,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDishCard(QuickBiteTokens tokens) {
+    final item = _menuItems[_displayIndex];
+    final restaurant = _restaurant!;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 110),
+      child: Container(
+        key: ValueKey(_displayIndex),
+        child: Column(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: FoodImage(
+                imageUrl: QuickBiteImages.forMenuItem(
+                  itemName: item.name,
+                  backendImageUrl: item.image,
+                ),
+                width: double.infinity,
+                height: 160,
+                cacheWidth: 600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              item.name,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w800),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'from ${restaurant.name}',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: tokens.primary),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _formatInr(item.priceMinor),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatInr(int minor) {
+    return '₹${minor ~/ 100}.${(minor % 100).toString().padLeft(2, '0')}';
   }
 }
