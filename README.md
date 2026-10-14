@@ -2,21 +2,22 @@
 
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)
+![Flutter](https://img.shields.io/badge/Flutter-3.47-02569B?logo=flutter&logoColor=white)
 ![RabbitMQ](https://img.shields.io/badge/RabbitMQ-3.12-FF6600?logo=rabbitmq&logoColor=white)
 ![PostgreSQL 16](https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-compose-2496ED?logo=docker&logoColor=white)
 
-**A reliable food-delivery order pipeline: FastAPI + RabbitMQ + PostgreSQL, with idempotent workers, bounded retries, a dead-letter queue, and a live operations console.**
+**A full-stack food-delivery app: a premium Flutter customer experience on top of a reliable event-driven order pipeline (FastAPI + RabbitMQ + PostgreSQL).**
 
-Orders flow `PENDING → PAID → CONFIRMED → DRIVER_ASSIGNED` as events over a durable RabbitMQ topic exchange. No message is ever silently lost: publisher confirms, an outbox relay, atomic idempotency claims, and a DLQ for poison messages.
+Browse 8 restaurants, build a cart, check out with idempotent order placement, and watch your order flow `PLACED → PREPARING → ON THE WAY` through a live tracking timeline — powered by durable RabbitMQ events, an outbox relay, bounded retries, and a dead-letter queue. No message is ever silently lost.
 
-**[🚀 Live Demo](https://itinerary-rehire-ramrod.ngrok-free.dev/dashboard)**
+**[🚀 Live Demo — open on your phone](https://snowplow-enjoyable-gush.ngrok-free.dev)**
 
-*The demo is shared from a local instance via ngrok — it is reachable while that instance is running.*
+*Shared from a local instance via ngrok — reachable while that instance is running. Tap "Visit Site" on the ngrok warning page. Demo logins are prefilled on the login screen.*
 
 ## Screenshots
 
-| Dashboard | Order timeline |
+| Ops dashboard | Order timeline |
 |---|---|
 | ![Dashboard](docs/screenshots/01-dashboard.png) | ![Order timeline](docs/screenshots/02-order-timeline.png) |
 
@@ -24,8 +25,22 @@ Orders flow `PENDING → PAID → CONFIRMED → DRIVER_ASSIGNED` as events over 
 |---|---|
 | ![Chaos Lab](docs/screenshots/03-chaos-lab.png) | ![Dark mode](docs/screenshots/04-dark-mode.png) |
 
+*The Flutter customer app is best seen live — open the demo link above on your phone.*
+
 ## Features
 
+### Customer app (Flutter)
+- **8 restaurants × 10 dishes** — real seeded menu data served by the backend API.
+- **Smart cart** — quantity controls, single-restaurant guard ("Start a new order?"), and "Continue shopping at \<restaurant\>" deep link.
+- **Idempotent checkout** — safe retries, order confirmation with confetti.
+- **Live order tracking** — honest 3-stage journey (Placed → Preparing → On the way), real timeline, driver card, and a notifications feed.
+- **Order history + "Order again"** — one tap rebuilds the cart from a past order.
+- **🎰 Surprise Me** — slot-machine random-dish picker across real restaurant menus.
+- **Admin console** — live order-distribution chart, tappable status filters, real backend stats.
+- **Premium Ember theme** — forest green + terracotta + warm ivory, 3 theme modes, responsive mobile/desktop.
+- **Performance** — shared image cache with decode widths, precached cards, pull-to-refresh.
+
+### Order pipeline (backend)
 - **Event-driven order flow** — `order.created → order.paid → order.confirmed → order.driver.assigned` over the durable `quickbite.orders` topic exchange.
 - **Outbox pattern** — orders and events commit in one transaction; a separate publisher relays with broker confirms.
 - **At-least-once, exactly-once effect** — atomic `INSERT … ON CONFLICT DO NOTHING` idempotency claims absorb redeliveries, retries, and duplicates.
@@ -39,7 +54,8 @@ Orders flow `PENDING → PAID → CONFIRMED → DRIVER_ASSIGNED` as events over 
 
 ```mermaid
 flowchart TB
-    API["FastAPI<br/>POST /orders"] -->|"tx: order + outbox row"| DB[("PostgreSQL")]
+    APP["Flutter app<br/>customer + admin"] -->|REST /api/v1| API["FastAPI<br/>POST /orders"]
+    API -->|"tx: order + outbox row"| DB[("PostgreSQL")]
     PUB["Outbox publisher<br/>confirms"] -->|"poll unpublished"| DB
     PUB -->|"publish + confirm"| EX["quickbite.orders<br/>(topic, durable)"]
     EX --> PQ["payment.queue"] & RQ["restaurant.queue"] & DQ["delivery.queue"] & NQ["notification.queue"]
@@ -58,13 +74,45 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full diagram and desi
 
 ## Quickstart
 
+### Backend
 ```bash
 docker compose up -d
 # wait ~20s for health checks
 curl http://127.0.0.1:8002/health
 ```
 
-Open the console: **http://127.0.0.1:8002/dashboard** — place an order and watch it flow.
+Ops console: **http://127.0.0.1:8002/dashboard** — place an order and watch it flow.
+
+### Flutter app
+```bash
+cd flutter_app
+flutter pub get
+flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8002
+```
+
+Demo logins (prefilled via quick-login chips on the login screen):
+- Customer: `customer@example.com` / `customer123`
+- Admin: `admin@example.com` / `admin123`
+
+### Phone demo via ngrok
+One ngrok tunnel + a tiny reverse proxy serves the Flutter app and the API on a single public URL (same origin, so no CORS issues):
+
+```bash
+# 1. single tunnel on the static domain -> proxy port
+ngrok start quickbite-demo
+# 2. proxy: /api/* -> :8002, everything else -> :8002's Flutter build on :8091
+python3 proxy.py
+# 3. threaded static server for the Flutter web build
+python3 serve.py
+```
+
+Build the web app against the public backend URL first:
+```bash
+cd flutter_app
+flutter build web --release --dart-define=API_BASE_URL=https://<your-ngrok-domain>
+```
+
+See [`knowledge-bytes/10_Phone_Demo.md`](knowledge-bytes/10_Phone_Demo.md) for the full setup and the ngrok multi-tunnel quirk it works around.
 
 Run the 5-minute demo: [`docs/DEMO.md`](docs/DEMO.md).
 
@@ -73,6 +121,7 @@ Run the tests:
 ```bash
 python -m pytest -q                                   # 60 unit/mocked tests
 QUICKBITE_RUN_LIVE=1 python -m pytest -q -m live      # 4 live broker/DB tests
+cd flutter_app && flutter test                        # 7 widget/unit tests
 ```
 
 Existing databases need one migration for the `FAILED` status:
@@ -88,6 +137,15 @@ quickbite/
 ├── app/                    # FastAPI app, workers, outbox publisher, ops API
 │   ├── workers/            # payment, restaurant, delivery, notification
 │   └── static/dashboard.html  # live operations console (no build step)
+├── flutter_app/            # Flutter customer + admin app (web, mobile-ready)
+│   └── lib/
+│       ├── screens/        # home, restaurant menu, cart, checkout,
+│       │                   # order tracking, history, admin, auth
+│       ├── widgets/        # shared UI components
+│       ├── providers/      # state (cart, auth, orders, theme)
+│       └── services/       # typed API client
+├── proxy.py                # phone-demo reverse proxy (/api/* -> backend)
+├── serve.py                # threaded static server for the Flutter web build
 ├── tests/                  # unit, integration, and live tests
 ├── docs/
 │   ├── ARCHITECTURE.md     # full architecture + diagrams
@@ -108,4 +166,4 @@ quickbite/
 
 - [Architecture](docs/ARCHITECTURE.md) · [API reference](docs/API.md) · [Demo guide](docs/DEMO.md)
 - [Testing](docs/TESTING.md) · [Technical report](docs/TECHNICAL_REPORT.md) · [Requirements checklist](docs/REQUIREMENTS_CHECKLIST.md)
-- [Knowledge bytes](knowledge-bytes/) — 8 subsystem notes, each traced to source files
+- [Knowledge bytes](knowledge-bytes/) — subsystem notes, each traced to source files
