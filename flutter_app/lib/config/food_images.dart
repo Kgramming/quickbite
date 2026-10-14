@@ -41,6 +41,21 @@ class QuickBiteImages {
       'photo-1563805042-7684c019e1cb'; // ice cream sundae
   static const _coffee =
       'photo-1509042239860-f550ce710b93'; // coffee cup
+  // Visually verified 2026-10-14 (downloaded + inspected, all HTTP 200).
+  static const _ramen =
+      'photo-1569718212165-3a8278d5f624'; // shrimp ramen bowl
+  static const _chocoCake =
+      'photo-1578985545062-69928b1d9587'; // chocolate drip cake
+  static const _fries =
+      'photo-1541592106381-b31e9677c0e5'; // french fries plate
+  static const _pancakes =
+      'photo-1567620905732-2d1ec7ab7445'; // pancake stack, syrup
+  static const _croissant =
+      'photo-1555507036-ab1f4038808a'; // croissants
+  static const _donuts =
+      'photo-1551024601-bec78aea704b'; // glazed sprinkle donuts
+  static const _iceCones =
+      'photo-1501443762994-82bd5dace89a'; // colorful ice cream cones
 
   static String _u(String photoId, {int w = 800}) =>
       '$_base/$photoId?w=$w&q=80&auto=format&fit=crop';
@@ -80,11 +95,12 @@ class QuickBiteImages {
     }
   }
 
-  /// Menu-item images: backend URL first, then keyword matching.
+  /// Menu-item images: backend URL first, then specific-dish matching,
+  /// then category fallbacks.
   ///
-  /// Order matters — check the most specific categories first so e.g.
-  /// "Paneer Tikka Pizza" lands on pizza, not paneer, and "Spring Rolls"
-  /// lands on Chinese, not sushi.
+  /// Order matters — the most specific matches come first, so e.g.
+  /// "Coffee Eclair" lands on pastry (not coffee), "Spring Rolls" on
+  /// Chinese (not sushi), and "Paneer Crunch Burger" on burger (not paneer).
   static String forMenuItem({
     required String itemName,
     String? backendImageUrl,
@@ -94,34 +110,46 @@ class QuickBiteImages {
       return backendImageUrl;
     }
     final n = itemName.toLowerCase();
-    // Desserts & sweets.
+
+    // --- Specific dishes (visually verified photos) ---
+    if (n.contains('gulab jamun')) return _u(_donuts, w: w);
+    if (n.contains('choco lava') || n.contains('cupcake')) {
+      return _u(_chocoCake, w: w);
+    }
+    if (n.contains('truffle pastry') || n.contains('red velvet')) {
+      return _u(_chocoCake, w: w);
+    }
     if (n.contains('cheesecake') ||
-        n.contains('pastry') ||
-        n.contains('cupcake') ||
-        n.contains('brownie') ||
-        n.contains('macaron') ||
+        n.contains('sizzling brownie') ||
+        n.contains('walnut brownie') ||
         n.contains('panna cotta') ||
         n.contains('tiramisu') ||
-        n.contains('eclair') ||
-        n.contains('kulfi') ||
-        n.contains('payasam') ||
-        n.contains('meetha') ||
-        n.contains('gulab jamun') ||
-        n.contains('mousse') ||
-        n.contains('cake') ||
-        n.contains('darsaan')) {
+        n.contains('double ka meetha') ||
+        n.contains('pal payasam')) {
       return _u(_dessert, w: w);
     }
-    // Ice cream & shakes.
-    if (n.contains('ice cream') ||
-        n.contains('sundae') ||
-        n.contains('shake') ||
-        n.contains('thickshake')) {
+    if (n.contains('eclair') || n.contains('macaron')) {
+      return _u(_croissant, w: w);
+    }
+    if (n.contains('kulfi') || n.contains('mochi')) {
+      return _u(_iceCones, w: w);
+    }
+    if (n.contains('mango shake')) return _u(_iceCones, w: w);
+    if (n.contains('sundae') || n.contains('shake') || n.contains('darsaan')) {
       return _u(_iceCream, w: w);
     }
-    // Coffee.
     if (n.contains('coffee')) return _u(_coffee, w: w);
-    // Chinese (before sushi: "Spring Rolls" contains "roll").
+    if (n.contains('uttapam')) return _u(_pancakes, w: w);
+    if (n.contains('ramen') || n.contains('soup')) return _u(_ramen, w: w);
+    if (n.contains('fries') || n.contains('onion ring')) {
+      return _u(_fries, w: w);
+    }
+    if (n.contains('naan') || n.contains('paratha')) {
+      return _u(_indianThali, w: w);
+    }
+    if (n.contains('jeera rice')) return _u(_biryani, w: w);
+
+    // --- Category fallbacks ---
     if (n.contains('noodle') ||
         n.contains('manchurian') ||
         n.contains('momo') ||
@@ -129,24 +157,20 @@ class QuickBiteImages {
         n.contains('chilli chicken') ||
         n.contains('dragon chicken') ||
         n.contains('spring roll') ||
-        n.contains('soup') ||
         n.contains('hakka') ||
         n.contains('schezwan')) {
       return _u(_chinese, w: w);
     }
-    // Sushi & Japanese.
     if (n.contains('sushi') ||
         n.contains('nigiri') ||
         n.contains('maki') ||
         n.contains('sashimi') ||
         n.contains('roll') ||
         n.contains('gyoza') ||
-        n.contains('ramen') ||
         n.contains('edamame') ||
         n.contains('katsu')) {
       return _u(_sushi, w: w);
     }
-    // Pizza & Italian.
     if (n.contains('pizza') ||
         n.contains('margherita') ||
         n.contains('pepperoni') ||
@@ -156,35 +180,27 @@ class QuickBiteImages {
         n.contains('supreme')) {
       return _u(_pizza, w: w);
     }
-    // Burgers, fries & sides (before paneer: "Paneer Crunch Burger").
-    if (n.contains('burger') ||
-        n.contains('fries') ||
-        n.contains('onion ring')) {
-      return _u(_burger, w: w);
-    }
-    // South Indian.
+    if (n.contains('burger')) return _u(_burger, w: w);
     if (n.contains('dosa') ||
         n.contains('idli') ||
         n.contains('vada') ||
-        n.contains('uttapam') ||
         n.contains('pongal')) {
       return _u(_dosa, w: w);
     }
     if (n.contains('biryani')) return _u(_biryani, w: w);
-    // Breads & rice (before the generic curry fallback: a thali photo shows
-    // breads, and the biryani photo is a rice dish).
-    if (n.contains('naan') || n.contains('paratha') || n.contains('kulcha')) {
-      return _u(_indianThali, w: w);
-    }
-    if (n.contains('jeera rice') || n.contains('steamed rice')) {
-      return _u(_biryani, w: w);
-    }
     if (n.contains('paneer')) return _u(_paneer, w: w);
     if (n.contains('kebab') || n.contains('tikka') || n.contains('tangdi')) {
       return _u(_kebab, w: w);
     }
     if (n.contains('samosa')) return _u(_samosa, w: w);
-    if (n.contains('raita')) return _u(_indianCurry, w: w);
+    if (n.contains('cake') ||
+        n.contains('pastry') ||
+        n.contains('brownie') ||
+        n.contains('mousse') ||
+        n.contains('pudding') ||
+        n.contains('meetha')) {
+      return _u(_dessert, w: w);
+    }
     return _u(_indianCurry, w: w);
   }
 
