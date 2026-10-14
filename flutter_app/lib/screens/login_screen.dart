@@ -9,6 +9,8 @@ import '../widgets/premium_widgets.dart';
 /// These are development-only credentials from the backend seed data.
 const String _demoEmail = 'customer@example.com';
 const String _demoPassword = 'customer123';
+const String _adminEmail = 'admin@example.com';
+const String _adminPassword = 'admin123';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -54,6 +56,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     _passwordController.dispose();
     _animController.dispose();
     super.dispose();
+  }
+
+  void _fillCredentials(String email, String password) {
+    setState(() {
+      _emailController.text = email;
+      _passwordController.text = password;
+      _emailError = null;
+      _passwordError = null;
+    });
   }
 
   void _validateAndLogin() {
@@ -313,6 +324,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                               ],
                             ),
                           ),
+                          const SizedBox(height: 10),
+                          // Quick-fill login chips: customer vs admin
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _LoginChip(
+                                icon: Icons.person_outline_rounded,
+                                label: 'Customer login',
+                                selected: _emailController.text ==
+                                    _demoEmail,
+                                onTap: () => _fillCredentials(
+                                    _demoEmail, _demoPassword),
+                              ),
+                              const SizedBox(width: 8),
+                              _LoginChip(
+                                icon:
+                                    Icons.admin_panel_settings_outlined,
+                                label: 'Admin login',
+                                selected: _emailController.text ==
+                                    _adminEmail,
+                                onTap: () => _fillCredentials(
+                                    _adminEmail, _adminPassword),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
@@ -321,6 +357,67 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Small tappable chip that fills the login form with a demo account.
+class _LoginChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _LoginChip({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected
+                ? scheme.primary
+                : scheme.outline.withValues(alpha: 0.5),
+            width: selected ? 1.5 : 1,
+          ),
+          color: selected
+              ? scheme.primary.withValues(alpha: 0.1)
+              : Colors.transparent,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon,
+                size: 16,
+                color: selected
+                    ? scheme.primary
+                    : Theme.of(context).textTheme.bodySmall?.color),
+            const SizedBox(width: 6),
+            Text(label,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(
+                      fontWeight: selected
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                      color: selected ? scheme.primary : null,
+                    )),
+          ],
         ),
       ),
     );
