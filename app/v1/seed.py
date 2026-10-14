@@ -49,7 +49,7 @@ RESTAURANTS = [
     },
     {
         "id": "rest_dosa",
-        "name": "Dosa District",
+        "name": "Dosa Diner",
         "description": "South Indian classics",
         "items": [
             ("item_masala_dosa", "Masala Dosa", "Crisp crepe, potato palya, trio of chutneys", 12999),
@@ -66,7 +66,7 @@ RESTAURANTS = [
     },
     {
         "id": "rest_chinese",
-        "name": "Dragon Wok",
+        "name": "Wok Dynasty",
         "description": "Indo-Chinese favourites",
         "items": [
             ("item_hakka_noodles", "Veg Hakka Noodles", "Smoky wok toss, spring onions", 14999),
@@ -83,7 +83,7 @@ RESTAURANTS = [
     },
     {
         "id": "rest_burger",
-        "name": "Burger Barn",
+        "name": "Patty House",
         "description": "Smash burgers and shakes",
         "items": [
             ("item_classic_smash", "Classic Smash Burger", "Double patty, cheddar, house sauce", 19999),
@@ -117,7 +117,7 @@ RESTAURANTS = [
     },
     {
         "id": "rest_sushi",
-        "name": "Tokyo Table",
+        "name": "Sakura Sushi",
         "description": "Sushi and Japanese bowls",
         "items": [
             ("item_california_roll", "California Roll (8 pc)", "Crabstick, avocado, cucumber", 34999),
@@ -180,6 +180,12 @@ def seed():
                 rest = Restaurant(id=r["id"], name=r["name"], description=r["description"])
                 session.add(rest)
                 print(f"created restaurant {r['name']}")
+            else:
+                # Keep name/description in sync so renames apply on re-seed.
+                if rest.name != r["name"] or rest.description != r["description"]:
+                    print(f"renamed restaurant {rest.name} -> {r['name']}")
+                    rest.name = r["name"]
+                    rest.description = r["description"]
             for item_id, name, desc, price_minor in r["items"]:
                 mi = session.execute(
                     select(MenuItem).where(MenuItem.id == item_id)

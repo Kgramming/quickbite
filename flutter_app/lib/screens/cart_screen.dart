@@ -185,6 +185,19 @@ class CartScreen extends ConsumerWidget {
                                 onPressed: () =>
                                     context.go('/checkout'),
                               ),
+                              if (cart.restaurantId != null)
+                                TextButton.icon(
+                                  onPressed: () => context.go(
+                                      '/restaurant/${cart.restaurantId}'),
+                                  icon: const Icon(
+                                      Icons.storefront_rounded,
+                                      size: 18),
+                                  label: Text(
+                                    cart.restaurantName != null
+                                        ? 'Continue shopping at ${cart.restaurantName}'
+                                        : 'Continue shopping',
+                                  ),
+                                ),
                             ],
                           ),
                         ),

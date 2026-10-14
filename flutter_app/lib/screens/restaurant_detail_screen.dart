@@ -85,6 +85,43 @@ class _RestaurantDetailScreenState
     );
   }
 
+  /// Adds an item, asking first when the cart holds another restaurant's
+  /// dishes — QuickBite allows one restaurant per order.
+  Future<void> _addItemWithCheck(MenuItem item, String restaurantName) async {
+    final cart = ref.read(cartProvider);
+    final notifier = ref.read(cartProvider.notifier);
+    final switching = cart.items.isNotEmpty &&
+        cart.restaurantId != null &&
+        cart.restaurantId != widget.restaurantId;
+    if (switching) {
+      final cartName = cart.restaurantName ?? 'another restaurant';
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Start a new order?'),
+          content: Text(
+            'Your cart has items from $cartName. '
+            'QuickBite allows one restaurant per order — '
+            'adding this dish will clear your current cart.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Keep cart'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Start new order'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+      notifier.clearCart();
+    }
+    notifier.addItem(item, widget.restaurantId, restaurantName: restaurantName);
+  }
+
   Widget _buildBody(BuildContext context, tokens, Restaurant restaurant,
       AsyncValue<RestaurantMenu> menuAsync) {
     final cart = ref.watch(cartProvider);
@@ -198,7 +235,7 @@ class _RestaurantDetailScreenState
             ),
             // Menu
             menuAsync.when(
-              data: (menu) => _buildMenu(context, menu),
+              data: (menu) => _buildMenu(context, menu, restaurant.name),
               loading: () => const SliverToBoxAdapter(
                 child: Padding(
                   padding: EdgeInsets.all(20),
@@ -231,7 +268,7 @@ class _RestaurantDetailScreenState
     );
   }
 
-  Widget _buildMenu(BuildContext context, RestaurantMenu menu) {
+  Widget _buildMenu(BuildContext context, RestaurantMenu menu, String restaurantName) {
     final items = menu.items.where((item) {
       if (_menuQuery.isEmpty) return true;
       return item.name.toLowerCase().contains(_menuQuery) ||
@@ -255,7 +292,11 @@ class _RestaurantDetailScreenState
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate(
           (context, i) =>
-              _MenuItemCard(item: items[i], restaurantId: widget.restaurantId),
+              _MenuItemCard(
+                item: items[i],
+                restaurantId: widget.restaurantId,
+                onAdd: () => _addItemWithCheck(items[i], restaurantName),
+              ),
           childCount: items.length,
         ),
       ),
@@ -321,8 +362,10 @@ class _MetaChip extends StatelessWidget {
 class _MenuItemCard extends ConsumerWidget {
   final MenuItem item;
   final String restaurantId;
+  final VoidCallback onAdd;
 
-  const _MenuItemCard({required this.item, required this.restaurantId});
+  const _MenuItemCard(
+      {required this.item, required this.restaurantId, required this.onAdd});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -380,10 +423,7 @@ class _MenuItemCard extends ConsumerWidget {
                               ?.copyWith(fontWeight: FontWeight.w800)),
                       const Spacer(),
                       if (qty == 0)
-                        _AddButton(
-                            onPressed: () => ref
-                                .read(cartProvider.notifier)
-                                .addItem(item, restaurantId))
+                        _AddButton(onPressed: onAdd)
                       else
                         QbStepper(
                           quantity: qty,

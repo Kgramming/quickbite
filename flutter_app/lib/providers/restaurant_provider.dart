@@ -34,12 +34,14 @@ class CartItem {
 
 class CartState {
   final String? restaurantId;
+  final String? restaurantName;
   final List<CartItem> items;
   final bool isCheckingOut;
   final String? error;
 
   const CartState({
     this.restaurantId,
+    this.restaurantName,
     this.items = const [],
     this.isCheckingOut = false,
     this.error,
@@ -57,12 +59,14 @@ class CartState {
 
   CartState copyWith({
     String? restaurantId,
+    String? restaurantName,
     List<CartItem>? items,
     bool? isCheckingOut,
     String? error,
   }) {
     return CartState(
       restaurantId: restaurantId ?? this.restaurantId,
+      restaurantName: restaurantName ?? this.restaurantName,
       items: items ?? this.items,
       isCheckingOut: isCheckingOut ?? this.isCheckingOut,
       error: error ?? this.error,
@@ -73,12 +77,13 @@ class CartState {
 class CartNotifier extends StateNotifier<CartState> {
   CartNotifier() : super(const CartState());
 
-  void addItem(MenuItem menuItem, String restaurantId) {
+  void addItem(MenuItem menuItem, String restaurantId, {String? restaurantName}) {
     // Check if switching restaurants
     if (state.restaurantId != null && state.restaurantId != restaurantId) {
       // Clear cart when switching restaurants
       state = CartState(
         restaurantId: restaurantId,
+        restaurantName: restaurantName,
         items: [CartItem(menuItem: menuItem)],
       );
       return;
@@ -95,11 +100,13 @@ class CartNotifier extends StateNotifier<CartState> {
       );
       state = state.copyWith(
         restaurantId: restaurantId,
+        restaurantName: restaurantName,
         items: updatedItems,
       );
     } else {
       state = state.copyWith(
         restaurantId: restaurantId,
+        restaurantName: restaurantName,
         items: [...state.items, CartItem(menuItem: menuItem)],
       );
     }
