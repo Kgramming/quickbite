@@ -1195,6 +1195,7 @@ class _SurpriseSheetState extends ConsumerState<_SurpriseSheet> {
               child: FoodImage(
                 imageUrl: QuickBiteImages.forMenuItem(
                   itemName: item.name,
+                  itemId: item.id,
                   backendImageUrl: item.image,
                 ),
                 width: double.infinity,

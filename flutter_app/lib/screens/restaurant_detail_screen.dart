@@ -363,6 +363,7 @@ class _MenuItemCard extends ConsumerWidget {
             FoodImage(
               imageUrl: QuickBiteImages.forMenuItem(
                 itemName: item.name,
+                itemId: item.id,
                 backendImageUrl: item.image,
               ),
               width: 96,

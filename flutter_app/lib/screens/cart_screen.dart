@@ -73,6 +73,8 @@ class CartScreen extends ConsumerWidget {
                                       QuickBiteImages.forMenuItem(
                                     itemName:
                                         item.menuItem.name,
+                                    itemId:
+                                        item.menuItem.id,
                                     backendImageUrl:
                                         item.menuItem.image,
                                   ),

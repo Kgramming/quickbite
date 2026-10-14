@@ -26,8 +26,6 @@ class QuickBiteImages {
       'photo-1546833999-b9f581a1996d'; // indian curry/thali
   static const _samosa = 'photo-1601050690597-df0568f70950'; // samosa
   static const _paneer = 'photo-1631452180519-c014fe946bc7'; // paneer tikka
-  static const _vadaPav =
-      'photo-1606755962773-d324e0a13086'; // vada pav / burger-like
   static const _kebab = 'photo-1599487488170-d11ec9c172f0'; // kebab skewers
   static const _indianCurry =
       'photo-1585937421612-70a008356fbe'; // indian curry bowl
@@ -103,11 +101,17 @@ class QuickBiteImages {
   /// Chinese (not sushi), and "Paneer Crunch Burger" on burger (not paneer).
   static String forMenuItem({
     required String itemName,
+    String? itemId,
     String? backendImageUrl,
     int w = 400,
   }) {
     if (backendImageUrl != null && backendImageUrl.isNotEmpty) {
       return backendImageUrl;
+    }
+    // AI-generated per-dish photo bundled as a Flutter asset — zero network
+    // dependency, zero loading failures.
+    if (itemId != null && itemId.isNotEmpty) {
+      return 'assets/dishes/$itemId.jpg';
     }
     final n = itemName.toLowerCase();
 
@@ -211,7 +215,12 @@ class QuickBiteImages {
   /// `precacheImage` calls) using the same URL + width. Use the same
   /// [cacheWidth] for the widget and its precache call.
   static ImageProvider imageProvider(String url, {int? cacheWidth}) {
-    final base = NetworkImage(url);
+    final ImageProvider<Object> base;
+    if (url.startsWith('assets/')) {
+      base = AssetImage(url);
+    } else {
+      base = NetworkImage(url);
+    }
     if (cacheWidth == null) return base;
     return ResizeImage(base, width: cacheWidth);
   }
