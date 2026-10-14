@@ -32,6 +32,11 @@ class QuickBiteImages {
   static const _indianCurry =
       'photo-1585937421612-70a008356fbe'; // indian curry bowl
   static const _burger = 'photo-1568901346375-23c9450c58cd'; // burger
+  static const _sushi = 'photo-1579871494447-9811cf80d66c'; // sushi platter
+  static const _chinese =
+      'photo-1585032226651-759b368d7246'; // noodle bowl
+  static const _dessert =
+      'photo-1551024506-0bccd828d307'; // chocolate dessert
 
   static String _u(String photoId, {int w = 800}) =>
       '$_base/$photoId?w=$w&q=80&auto=format&fit=crop';
@@ -56,6 +61,16 @@ class QuickBiteImages {
         return _u(_pizza, w: w);
       case 'rest_dosa':
         return _u(_dosa, w: w);
+      case 'rest_chinese':
+        return _u(_chinese, w: w);
+      case 'rest_burger':
+        return _u(_burger, w: w);
+      case 'rest_north':
+        return _u(_indianCurry, w: w);
+      case 'rest_sushi':
+        return _u(_sushi, w: w);
+      case 'rest_dessert':
+        return _u(_dessert, w: w);
       default:
         return _u(_forCuisine(restaurantName), w: w);
     }
