@@ -197,7 +197,17 @@ class QuickBiteApiClient {
         '${AppConfig.apiPath}/orders/$orderId/notifications',
         queryParameters: {'page': page, 'page_size': pageSize},
       );
-      final list = response.data as List;
+      // Backend returns a paginated Page object {items, page, page_size,
+      // total}; accept a raw list too for forward compatibility.
+      final data = response.data;
+      final List list;
+      if (data is Map<String, dynamic> && data['items'] is List) {
+        list = data['items'] as List;
+      } else if (data is List) {
+        list = data;
+      } else {
+        return [];
+      }
       return list
           .map((item) => OrderNotification.fromJson(item as Map<String, dynamic>))
           .toList();
